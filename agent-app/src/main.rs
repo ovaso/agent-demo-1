@@ -1,9 +1,11 @@
 use std::{
     env,
     error::Error,
-    io::{self, BufRead, Write},
+    io::{self, Write},
     process,
 };
+
+use rustyline::{DefaultEditor, error::ReadlineError};
 
 use crate::provider::{AnthropicProvider, OpenAiCompatibleProvider};
 use agent_core::{
@@ -92,23 +94,26 @@ where
     let session_id = env::var("RS_AGENT_SESSION").unwrap_or_else(|_| "default".to_owned());
 
     println!("rs-agent 已启动。输入 /help 查看命令。");
-    let stdin = io::stdin();
-    let mut input = stdin.lock();
+    let mut editor = DefaultEditor::new()?;
 
     loop {
-        print!("\n你 > ");
-        io::stdout().flush()?;
-
-        let mut line = String::new();
-        if input.read_line(&mut line)? == 0 {
-            println!();
-            break;
-        }
-
+        let line = match editor.readline("\n你 > ") {
+            Ok(line) => line,
+            Err(ReadlineError::Interrupted) => {
+                println!("^C");
+                continue;
+            }
+            Err(ReadlineError::Eof) => {
+                println!();
+                break;
+            }
+            Err(error) => return Err(Box::new(error)),
+        };
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
+        editor.add_history_entry(line)?;
 
         match line {
             "/exit" | "/quit" => break,

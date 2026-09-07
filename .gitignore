@@ -1,0 +1,21 @@
+# Cargo 构建产物
+/target/
+**/target/
+
+# Agent 运行时状态
+**/agent-context.sqlite3
+**/agent-context.sqlite3-*
+**/memories/
+**/agent-trace.jsonl
+
+# 本地密钥与环境配置
+.env
+.env.*
+!.env.example
+
+# 本机开发工具与系统文件
+/mise.toml
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

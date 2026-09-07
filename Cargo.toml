@@ -1,0 +1,11 @@
+[workspace]
+members = ["agent-app", "agent-core", "agent-tool-macro"]
+resolver = "3"
+
+[profile.release]
+opt-level = "z"
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+incremental = false

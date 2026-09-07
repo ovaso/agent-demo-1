@@ -1,0 +1,255 @@
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    error::Error,
+    fmt::{self, Display, Formatter},
+};
+
+use super::{Arguments, Parameter, Tool, ToolDefinition, ToolError, ToolOutput};
+
+/// 存放具名工具，并将通过校验的调用路由给对应工具。
+#[derive(Default)]
+pub struct Registry {
+    tools: BTreeMap<String, Box<dyn Tool>>,
+}
+
+impl Registry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// 注册工具；工具名和参数名都必须唯一。
+    pub fn register<T>(&mut self, tool: T) -> Result<(), RegistryError>
+    where
+        T: Tool + 'static,
+    {
+        let name = tool.name().to_owned();
+        validate_definition(&tool)?;
+
+        if self.tools.contains_key(&name) {
+            return Err(RegistryError::DuplicateTool { name });
+        }
+
+        self.tools.insert(name, Box::new(tool));
+        Ok(())
+    }
+
+    /// 按名称顺序返回定义，以保持发送给 LLM 的提示词稳定。
+    pub fn definitions(&self) -> Vec<ToolDefinition> {
+        self.tools.values().map(|tool| tool.definition()).collect()
+    }
+
+    pub fn contains(&self, name: &str) -> bool {
+        self.tools.contains_key(name)
+    }
+
+    /// 校验参数并调用指定工具。
+    pub fn invoke(&self, name: &str, arguments: &Arguments) -> Result<ToolOutput, RegistryError> {
+        let tool = self
+            .tools
+            .get(name)
+            .ok_or_else(|| RegistryError::ToolNotFound {
+                name: name.to_owned(),
+            })?;
+
+        validate_arguments(name, tool.parameters(), arguments)?;
+
+        tool.invoke(arguments)
+            .map_err(|source| RegistryError::Execution {
+                tool: name.to_owned(),
+                source,
+            })
+    }
+}
+
+#[derive(Debug)]
+pub enum RegistryError {
+    EmptyToolName,
+    DuplicateTool { name: String },
+    EmptyParameterName { tool: String },
+    DuplicateParameter { tool: String, parameter: String },
+    ToolNotFound { name: String },
+    MissingArgument { tool: String, parameter: String },
+    UnexpectedArgument { tool: String, parameter: String },
+    Execution { tool: String, source: ToolError },
+}
+
+impl Display for RegistryError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyToolName => formatter.write_str("a tool name cannot be empty"),
+            Self::DuplicateTool { name } => {
+                write!(formatter, "tool `{name}` is already registered")
+            }
+            Self::EmptyParameterName { tool } => {
+                write!(
+                    formatter,
+                    "tool `{tool}` has a parameter with an empty name"
+                )
+            }
+            Self::DuplicateParameter { tool, parameter } => {
+                write!(
+                    formatter,
+                    "tool `{tool}` has duplicate parameter `{parameter}`"
+                )
+            }
+            Self::ToolNotFound { name } => write!(formatter, "tool `{name}` is not registered"),
+            Self::MissingArgument { tool, parameter } => {
+                write!(formatter, "tool `{tool}` requires argument `{parameter}`")
+            }
+            Self::UnexpectedArgument { tool, parameter } => {
+                write!(
+                    formatter,
+                    "tool `{tool}` does not accept argument `{parameter}`"
+                )
+            }
+            Self::Execution { tool, source } => write!(formatter, "tool `{tool}` failed: {source}"),
+        }
+    }
+}
+
+impl Error for RegistryError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Execution { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}
+
+fn validate_definition(tool: &dyn Tool) -> Result<(), RegistryError> {
+    let name = tool.name();
+    if name.trim().is_empty() {
+        return Err(RegistryError::EmptyToolName);
+    }
+
+    let mut parameter_names = BTreeSet::new();
+    for parameter in tool.parameters() {
+        if parameter.name().trim().is_empty() {
+            return Err(RegistryError::EmptyParameterName {
+                tool: name.to_owned(),
+            });
+        }
+
+        if !parameter_names.insert(parameter.name()) {
+            return Err(RegistryError::DuplicateParameter {
+                tool: name.to_owned(),
+                parameter: parameter.name().to_owned(),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_arguments(
+    tool_name: &str,
+    parameters: &[Parameter],
+    arguments: &Arguments,
+) -> Result<(), RegistryError> {
+    for parameter in parameters {
+        if parameter.is_required() && arguments.get(parameter.name()).is_none() {
+            return Err(RegistryError::MissingArgument {
+                tool: tool_name.to_owned(),
+                parameter: parameter.name().to_owned(),
+            });
+        }
+    }
+
+    for (argument, _) in arguments.iter() {
+        if !parameters
+            .iter()
+            .any(|parameter| parameter.name() == argument)
+        {
+            return Err(RegistryError::UnexpectedArgument {
+                tool: tool_name.to_owned(),
+                parameter: argument.to_owned(),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct EchoTool {
+        parameters: Vec<Parameter>,
+    }
+
+    impl EchoTool {
+        fn new() -> Self {
+            Self {
+                parameters: vec![Parameter::required("message", "Text to echo")],
+            }
+        }
+    }
+
+    impl Tool for EchoTool {
+        fn name(&self) -> &str {
+            "echo"
+        }
+
+        fn description(&self) -> &str {
+            "Returns the supplied message"
+        }
+
+        fn parameters(&self) -> &[Parameter] {
+            &self.parameters
+        }
+
+        fn invoke(&self, arguments: &Arguments) -> Result<ToolOutput, ToolError> {
+            Ok(ToolOutput::text(arguments.get("message").unwrap()))
+        }
+    }
+
+    #[test]
+    fn registers_and_invokes_a_tool() {
+        let mut registry = Registry::new();
+        registry.register(EchoTool::new()).unwrap();
+
+        let output = registry
+            .invoke("echo", &Arguments::new().with("message", "hello"))
+            .unwrap();
+
+        assert_eq!(output.content(), "hello");
+        assert!(registry.contains("echo"));
+        assert_eq!(registry.definitions()[0].name(), "echo");
+    }
+
+    #[test]
+    fn rejects_duplicate_tool_names() {
+        let mut registry = Registry::new();
+        registry.register(EchoTool::new()).unwrap();
+
+        assert!(matches!(
+            registry.register(EchoTool::new()),
+            Err(RegistryError::DuplicateTool { .. })
+        ));
+    }
+
+    #[test]
+    fn validates_missing_and_unexpected_arguments() {
+        let mut registry = Registry::new();
+        registry.register(EchoTool::new()).unwrap();
+
+        assert!(matches!(
+            registry.invoke("echo", &Arguments::new()),
+            Err(RegistryError::MissingArgument { .. })
+        ));
+        assert!(matches!(
+            registry.invoke("echo", &Arguments::new().with("extra", "value")),
+            Err(RegistryError::MissingArgument { .. })
+        ));
+        assert!(matches!(
+            registry.invoke(
+                "echo",
+                &Arguments::new()
+                    .with("message", "hello")
+                    .with("extra", "value"),
+            ),
+            Err(RegistryError::UnexpectedArgument { .. })
+        ));
+    }
+}

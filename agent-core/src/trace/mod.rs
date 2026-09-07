@@ -4,7 +4,7 @@ use std::{
     collections::BTreeMap,
     error::Error,
     fmt::{self, Display, Formatter},
-    fs::{File, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::{BufWriter, Write},
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
@@ -62,6 +62,13 @@ pub struct FileTraceSink {
 
 impl FileTraceSink {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, TraceError> {
+        let path = path.as_ref();
+        if let Some(parent) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            fs::create_dir_all(parent).map_err(TraceError::io)?;
+        }
         let output = OpenOptions::new()
             .create(true)
             .append(true)
@@ -133,5 +140,23 @@ mod tests {
         assert_eq!(event["fields"]["count"], 1);
 
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn creates_a_missing_parent_directory() {
+        let directory = std::env::temp_dir().join(format!(
+            "rs-agent-trace-directory-test-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let path = directory.join("logs").join("agent.jsonl");
+
+        FileTraceSink::open(&path).unwrap();
+
+        assert!(path.is_file());
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }

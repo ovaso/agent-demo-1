@@ -7,6 +7,7 @@
 **/agent-context.sqlite3-*
 **/memories/
 **/agent-trace.jsonl
+logs/*
 
 # 本地密钥与环境配置
 .env

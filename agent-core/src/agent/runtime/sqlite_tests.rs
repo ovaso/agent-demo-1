@@ -135,3 +135,40 @@ fn reopening_inflight_tool_requires_resolution_before_dispatch() {
     ));
     assert_eq!(count.load(Ordering::SeqCst), 0);
 }
+
+#[test]
+fn plans_and_blackboard_survive_reopen_and_conflicts_do_not_change_the_checkpoint() {
+    use crate::agent::{
+        blackboard::{BoardUpdate, EntryKind},
+        planning::Plan,
+    };
+    let db = Database::new();
+    let (mut first, _) = runtime(db.open(), vec![]);
+    first
+        .start("run", "session", "go", Context::new(), RunLimits::new(2))
+        .unwrap();
+    let plan: Plan = serde_json::from_str(r#"{"goal":"go","requirements":["checked"],"tasks":[{"id":"a","description":"inspect","acceptance":["checked"],"action":{"kind":"agent","prompt":"inspect"}}]}"#).unwrap();
+    first.propose_plan("run", 0, plan).unwrap();
+    let update = BoardUpdate {
+        key: "finding".into(),
+        expected_revision: 0,
+        kind: EntryKind::Hypothesis,
+        content: "candidate".into(),
+        sources: vec![],
+    };
+    let saved = first.write_board("run", "main", update.clone()).unwrap();
+    assert_eq!(
+        first.write_board("run", "other", update).unwrap_err(),
+        RuntimeError::Conflict
+    );
+    drop(first);
+    let store = db.open();
+    let restored = store.load("run").unwrap().unwrap();
+    assert_eq!(restored, saved);
+    assert_eq!(restored.plans().revision(), 1);
+    assert_eq!(
+        restored.blackboard().latest("finding").unwrap().author,
+        "main"
+    );
+    assert_eq!(restored.budget().model_calls(), 0);
+}

@@ -13,6 +13,7 @@ mod state;
 mod store;
 #[cfg(test)]
 mod tests;
+mod workspace;
 
 pub use budget::{RunBudget, RunLimits};
 pub use error::RuntimeError;

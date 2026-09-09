@@ -40,6 +40,10 @@ pub enum LoopPhase {
 /// 一个根任务的一致检查点。会话、待调用工具和预算在同一提交中保存。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunState {
+    #[serde(default)]
+    pub(crate) plans: super::super::planning::PlanHistory,
+    #[serde(default)]
+    pub(crate) blackboard: super::super::blackboard::Blackboard,
     pub(crate) format_version: u32,
     pub(crate) revision: u64,
     pub(crate) id: String,
@@ -57,6 +61,12 @@ pub struct RunState {
 }
 
 impl RunState {
+    pub fn plans(&self) -> &super::super::planning::PlanHistory {
+        &self.plans
+    }
+    pub fn blackboard(&self) -> &super::super::blackboard::Blackboard {
+        &self.blackboard
+    }
     pub fn id(&self) -> &str {
         &self.id
     }

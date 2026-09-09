@@ -1,6 +1,8 @@
 //! Agent 的配置、结果与执行循环。
 
+pub mod blackboard;
 mod model_step;
+pub mod planning;
 mod runner;
 pub mod runtime;
 #[cfg(test)]

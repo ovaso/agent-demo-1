@@ -28,6 +28,8 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         context.push_user(input);
         super::store::bounded_json(&context, limits.max_context_bytes)?;
         let state = RunState {
+            plans: Default::default(),
+            blackboard: Default::default(),
             format_version: super::state::FORMAT_VERSION,
             revision: 0,
             id: id.into(),

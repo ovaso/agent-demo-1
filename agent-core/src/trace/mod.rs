@@ -1,5 +1,8 @@
 //! Agent 执行链路的结构化文件追踪。
 
+mod run;
+pub(crate) use run::RunTrace;
+
 use std::{
     collections::BTreeMap,
     error::Error,

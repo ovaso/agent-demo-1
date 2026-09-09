@@ -21,6 +21,7 @@ mod output;
 mod provider;
 mod terminal;
 mod tools;
+mod trace_map;
 
 fn main() {
     if let Err(error) = run() {
@@ -30,13 +31,31 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
+    let mut args = env::args_os().skip(1);
+    if args.next().as_deref() == Some(std::ffi::OsStr::new("--trace-map")) {
+        let path = args
+            .next()
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| trace_path().into());
+        if args.next().is_some() {
+            return Err("用法：agent-app --trace-map [JSONL 文件]".into());
+        }
+        trace_map::show(path, &mut io::stdout().lock())?;
+        return Ok(());
+    }
     let provider = env::var("RS_AGENT_PROVIDER").unwrap_or_else(|_| "openai".to_owned());
 
     match provider.as_str() {
         "openai" | "openai-compatible" => {
             let api_key = required_environment("OPENAI_API_KEY")?;
             let model = required_environment("OPENAI_MODEL")?;
-            let mut provider = OpenAiCompatibleProvider::new(api_key, model);
+            let stream_usage = match env::var("OPENAI_STREAM_USAGE").as_deref() {
+                Ok("0" | "false") => false,
+                Ok("1" | "true") | Err(env::VarError::NotPresent) => true,
+                _ => return Err("OPENAI_STREAM_USAGE 必须为 true/false 或 1/0".into()),
+            };
+            let mut provider =
+                OpenAiCompatibleProvider::new(api_key, model).with_stream_usage(stream_usage);
             if let Ok(base_url) = env::var("OPENAI_BASE_URL") {
                 provider = provider.with_base_url(base_url);
             }
@@ -77,9 +96,8 @@ where
     tools.register(tools::session_finish_tool())?;
     tools.register(tools::WriteFile::new())?;
     tools.register(tools::RunCmd::new())?;
-    let trace_path =
-        env::var("RS_AGENT_TRACE_FILE").unwrap_or_else(|_| "agent-trace.jsonl".to_owned());
-    let trace_sink = FileTraceSink::open(trace_path)?;
+    let trace_path = trace_path();
+    let trace_sink = FileTraceSink::open(&trace_path)?;
     let mut agent =
         Agent::new(model, context_store, memory_store, tools).with_trace_sink(trace_sink);
     let session_id = env::var("RS_AGENT_SESSION").unwrap_or_else(|_| "default".to_owned());
@@ -109,6 +127,11 @@ where
         match command {
             "/exit" | "/quit" => break,
             "/help" => print_help(),
+            "/trace" => {
+                if let Err(error) = trace_map::show(&trace_path, &mut io::stdout().lock()) {
+                    eprintln!("调用链读取失败：{error}");
+                }
+            }
             "/reset" => reset_session(&mut agent, &session_id)?,
             _ => {
                 println!();
@@ -157,8 +180,14 @@ where
 }
 
 fn print_help() {
-    println!("命令：\n  /help  显示帮助\n  /reset 清除当前会话历史\n  /exit  退出程序");
+    println!(
+        "命令：\n  /help  显示帮助\n  /trace 查看调用树\n  /reset 清除当前会话历史\n  /exit  退出程序"
+    );
     println!(
         "输入：\n  Enter            发送\n  Ctrl+J / Alt+Enter 换行\n  Ctrl+C           取消当前输入\n  Ctrl+D           空输入时退出"
     );
+}
+
+fn trace_path() -> String {
+    env::var("RS_AGENT_TRACE_FILE").unwrap_or_else(|_| "agent-trace.jsonl".to_owned())
 }

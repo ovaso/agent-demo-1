@@ -1,6 +1,9 @@
 //! Agent 的配置、结果与执行循环。
 
 mod runner;
+#[cfg(test)]
+mod tests;
+mod tool_calls;
 
 use std::{
     error::Error,

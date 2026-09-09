@@ -1,5 +1,8 @@
 //! 模型服务的抽象接口。
 
+mod usage;
+pub use usage::ModelUsage;
+
 use std::{
     error::Error,
     fmt::{self, Display, Formatter},
@@ -50,6 +53,7 @@ impl<'a> ModelRequest<'a> {
 pub struct ModelResponse {
     text: Option<String>,
     tool_calls: Vec<ToolCall>,
+    usage: ModelUsage,
 }
 
 impl ModelResponse {
@@ -57,6 +61,7 @@ impl ModelResponse {
         Self {
             text: Some(text.into()),
             tool_calls: Vec::new(),
+            usage: ModelUsage::default(),
         }
     }
 
@@ -64,6 +69,7 @@ impl ModelResponse {
         Self {
             text: None,
             tool_calls,
+            usage: ModelUsage::default(),
         }
     }
 
@@ -83,6 +89,15 @@ impl ModelResponse {
         self.text.as_deref()
     }
 
+    pub fn with_usage(mut self, usage: ModelUsage) -> Self {
+        self.usage = usage;
+        self
+    }
+
+    pub fn usage(&self) -> ModelUsage {
+        self.usage
+    }
+
     pub fn into_parts(self) -> (Option<String>, Vec<ToolCall>) {
         (self.text, self.tool_calls)
     }
@@ -90,6 +105,11 @@ impl ModelResponse {
 
 /// 模型服务在 Agent loop 中需要实现的最小能力。
 pub trait ModelProvider {
+    /// 用于追踪的模型标识；不应包含密钥或请求内容。
+    fn model_name(&self) -> &str {
+        std::any::type_name::<Self>()
+    }
+
     fn complete(&mut self, request: ModelRequest<'_>) -> Result<ModelResponse, ModelError>;
 
     /// 流式生成文本；默认实现用于不支持流式协议的 provider。

@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use serde_json::json;
 
 use super::{Agent, AgentError, AgentResult};
@@ -117,67 +115,19 @@ where
         let request = trace.call(&mut agent.trace_sink, "model.prepare", || {
             Ok::<_, AgentError>(ModelRequest::new(context.snapshot(), &memories, &tools))
         })?;
-        trace.start(
+        let response = super::model_step::stream(
+            &mut agent.model,
             &mut agent.trace_sink,
-            "model.request",
-            json!({"provider": std::any::type_name::<M>(), "model": agent.model.model_name(), "loop_step": step}),
+            trace,
+            super::model_step::ModelStep {
+                request,
+                session_id,
+                step,
+            },
+            on_text_delta
+                .as_deref_mut()
+                .map(|callback| callback as &mut dyn FnMut(&str)),
         )?;
-        trace.model_usage(Default::default());
-        trace.record(
-            &mut agent.trace_sink,
-            TraceEvent::new("model.request.started")
-                .with_field("session_id", session_id)
-                .with_field("loop_step", step as u64)
-                .with_field("message_count", request.messages().len() as u64)
-                .with_field("tool_count", request.tools().len() as u64),
-        )?;
-
-        let model_started = Instant::now();
-        let mut first_delta_at = None;
-        let mut emitted_characters = 0usize;
-        let response = {
-            let mut emit = |delta: &str| {
-                if first_delta_at.is_none() {
-                    first_delta_at = Some(Instant::now());
-                }
-                emitted_characters += delta.chars().count();
-                if let Some(callback) = on_text_delta.as_deref_mut() {
-                    callback(delta);
-                }
-            };
-            agent.model.stream(request, &mut emit)?
-        };
-        trace.model_usage(response.usage());
-        let model_elapsed = model_started.elapsed();
-        trace.record(
-            &mut agent.trace_sink,
-            TraceEvent::new("model.response.completed")
-                .with_field("session_id", session_id)
-                .with_field("loop_step", step as u64)
-                .with_field("duration_ms", model_elapsed.as_millis() as u64)
-                .with_field("emitted_characters", emitted_characters as u64)
-                .with_field(
-                    "characters_per_second",
-                    if model_elapsed.is_zero() {
-                        0.0
-                    } else {
-                        emitted_characters as f64 / model_elapsed.as_secs_f64()
-                    },
-                ),
-        )?;
-        if let Some(first_delta_at) = first_delta_at {
-            trace.record(
-                &mut agent.trace_sink,
-                TraceEvent::new("model.first_text_delta")
-                    .with_field("session_id", session_id)
-                    .with_field("loop_step", step as u64)
-                    .with_field(
-                        "latency_ms",
-                        first_delta_at.duration_since(model_started).as_millis() as u64,
-                    ),
-            )?;
-        }
-        trace.end(&mut agent.trace_sink, None)?;
         let (text, calls) = response.into_parts();
 
         if calls.is_empty() {

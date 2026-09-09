@@ -1,6 +1,8 @@
 //! Agent 的配置、结果与执行循环。
 
+mod model_step;
 mod runner;
+pub mod runtime;
 #[cfg(test)]
 mod tests;
 mod tool_calls;
@@ -41,7 +43,7 @@ impl AgentConfig {
 }
 
 /// 一次 Agent 执行的最终结果。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AgentResult {
     text: String,
     steps: usize,

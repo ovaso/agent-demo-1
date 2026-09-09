@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 pub use registry::{Registry, RegistryError};
 
 /// 描述工具接受的一个输入参数。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Parameter {
     name: String,
     description: String,
@@ -51,7 +51,7 @@ impl Parameter {
 }
 
 /// LLM 选择和调用工具所需的元数据。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolDefinition {
     name: String,
     description: String,

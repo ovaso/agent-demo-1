@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use super::tool::ToolCall;
 
 mod memory;
+#[cfg(test)]
+mod protocol_tests;
 mod store;
 
 #[cfg(feature = "sqlite")]
@@ -137,7 +139,9 @@ impl Message {
 /// 单次 Agent 运行的有界会话历史。
 ///
 /// System prompt 独立保存，永远不会受历史上限影响；上限只作用于
-/// user、assistant 与 tool 消息。
+/// user、assistant 与 tool 消息。工具请求及其连续结果作为整体裁剪；
+/// 位于末尾的工具批次暂时允许超过消息上限，直到后续消息到来。
+/// 调用方仍需限制单批工具数量和结果字节数。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Context {
     system: Option<Message>,
@@ -214,7 +218,7 @@ impl Context {
         self.push(Message::tool(call_id, name, content));
     }
 
-    /// 更新上限，并立即丢弃超出的最旧历史消息。
+    /// 更新上限，并按完整工具批次丢弃最旧历史，保留末尾批次。
     pub fn set_history_limit(&mut self, history_limit: usize) {
         self.history_limit = history_limit;
         self.trim_history();
@@ -257,7 +261,22 @@ impl Context {
 
     fn trim_history(&mut self) {
         while self.history.len() > self.history_limit {
-            self.history.pop_front();
+            let remove = match self.history.front() {
+                Some(Message::Assistant { tool_calls, .. }) if !tool_calls.is_empty() => {
+                    let end = 1 + self
+                        .history
+                        .iter()
+                        .skip(1)
+                        .take_while(|message| matches!(message, Message::Tool { .. }))
+                        .count();
+                    if end == self.history.len() {
+                        break;
+                    }
+                    end
+                }
+                _ => 1,
+            };
+            self.history.drain(..remove);
         }
     }
 }

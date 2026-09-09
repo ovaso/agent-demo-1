@@ -1,0 +1,22 @@
+[package]
+name = "agent-render-cmd"
+version = "0.1.0"
+edition = "2024"
+description = "Incremental Markdown rendering for ANSI command-line applications"
+
+[dependencies]
+pulldown-cmark = { version = "0.13", default-features = false }
+pulldown-latex = { version = "0.8", default-features = false, optional = true }
+rust-latex-parser = { version = "0.1", default-features = false, optional = true }
+term-maths = { version = "1.0", default-features = false, optional = true }
+syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "default-themes", "regex-fancy"], optional = true }
+unicode-segmentation = { version = "1.13", default-features = false }
+unicode-width = { version = "0.2", default-features = false }
+
+[features]
+default = []
+syntax-highlighting = ["dep:syntect"]
+math = ["dep:pulldown-latex", "dep:rust-latex-parser", "dep:term-maths"]
+
+[dev-dependencies]
+vt100 = { version = "0.16", default-features = false }

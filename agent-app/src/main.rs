@@ -5,7 +5,7 @@ use std::{
     process,
 };
 
-use rustyline::{DefaultEditor, error::ReadlineError};
+use rustyline::error::ReadlineError;
 
 use crate::provider::{AnthropicProvider, OpenAiCompatibleProvider};
 use agent_core::{
@@ -18,7 +18,9 @@ use agent_core::{
     trace::{FileTraceSink, TraceSink},
 };
 
+mod output;
 mod provider;
+mod terminal;
 
 #[tool]
 fn echo(text: String) -> String {
@@ -93,11 +95,11 @@ where
         Agent::new(model, context_store, memory_store, tools).with_trace_sink(trace_sink);
     let session_id = env::var("RS_AGENT_SESSION").unwrap_or_else(|_| "default".to_owned());
 
-    println!("rs-agent 已启动。输入 /help 查看命令。");
-    let mut editor = DefaultEditor::new()?;
+    println!("rs-agent 已启动。Enter 发送，Ctrl+J / Alt+Enter 换行。输入 /help 查看命令。");
+    let mut editor = terminal::editor()?;
 
     loop {
-        let line = match editor.readline("\n你 > ") {
+        let line = match editor.readline(terminal::USER_PROMPT) {
             Ok(line) => line,
             Err(ReadlineError::Interrupted) => {
                 println!("^C");
@@ -109,24 +111,31 @@ where
             }
             Err(error) => return Err(Box::new(error)),
         };
-        let line = line.trim();
-        if line.is_empty() {
+        let command = line.trim();
+        if command.is_empty() {
             continue;
         }
-        editor.add_history_entry(line)?;
+        editor.add_history_entry(line.as_str())?;
 
-        match line {
+        match command {
             "/exit" | "/quit" => break,
             "/help" => print_help(),
             "/reset" => reset_session(&mut agent, &session_id)?,
-            message => {
-                print!("\n助手 > ");
+            _ => {
+                println!();
                 io::stdout().flush()?;
-                let mut print_delta = |delta: &str| {
-                    print!("{delta}");
-                    let _ = io::stdout().flush();
-                };
-                match agent.run_stream(&session_id, message, &mut print_delta) {
+                let mut output = output::StreamingOutput::new(io::stdout().lock());
+                let mut output_error = None;
+                let result = agent.run_stream(&session_id, &line, &mut |delta| {
+                    if output_error.is_none() {
+                        output_error = output.push(delta).err();
+                    }
+                });
+                if let Some(error) = output_error {
+                    return Err(error.into());
+                }
+                output.finish()?;
+                match result {
                     Ok(result) if result.session_finished() => {
                         println!("\n会话已结束：{}", result.text());
                         break;
@@ -160,4 +169,7 @@ where
 
 fn print_help() {
     println!("命令：\n  /help  显示帮助\n  /reset 清除当前会话历史\n  /exit  退出程序");
+    println!(
+        "输入：\n  Enter            发送\n  Ctrl+J / Alt+Enter 换行\n  Ctrl+C           取消当前输入\n  Ctrl+D           空输入时退出"
+    );
 }

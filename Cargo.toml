@@ -1,5 +1,5 @@
 [workspace]
-members = ["agent-app", "agent-core", "agent-tool-macro"]
+members = ["agent-app", "agent-core", "agent-tool-macro", "agent-render-cmd"]
 resolver = "3"
 
 [profile.release]

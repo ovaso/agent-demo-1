@@ -32,7 +32,8 @@ impl SqliteRunStore {
             connection,
             lock_path: lock_path.into(),
         };
-        let _lease = store.acquire()?;
+        // Schema initialization is serialized by SQLite; opening a reader must
+        // remain possible while another runtime holds the execution lease.
         store
             .connection
             .execute_batch(

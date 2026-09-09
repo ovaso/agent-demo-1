@@ -56,6 +56,9 @@ impl<M, R, S, T> Runtime<M, R, S, T> {
     pub fn store(&self) -> &R {
         &self.store
     }
+    pub fn store_mut(&mut self) -> &mut R {
+        &mut self.store
+    }
 }
 
 impl<M, R: RunStore, S, T> Runtime<M, R, S, T> {

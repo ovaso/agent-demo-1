@@ -32,3 +32,7 @@
   - 取消未执行工具会补齐协议结果，后续会话可以继续；取消不抹除历史检查点。SQLite 仍由原可选 feature 控制。
   - 格式、Clippy、workspace 测试和无默认 feature 测试均通过；同时修正了 SQLite 专用辅助函数在无默认 feature 下的已有警告。
   - release 为 5,791,312 字节，比初始基线增加 448 字节；SQLite 运行后端尚未接入 CLI。当前快照整行保存，会话内容未变化时不重复更新投影行；未测量持久化耗时。
+- CLI 已切换到可恢复运行时：普通输入自动建立和执行任务，支持 `/start`、`/step`、`/pause`、`/resume`、`/status`、`/cancel`、`/budget`、`/resolve` 与 `/retry`；`--status` 可在没有 API 配置时查看任务。终端命令与会话装配从 main.rs 提取到 cli/。
+  - 4 项命令解析与 CLI 跨实例恢复测试通过；格式、Clippy、workspace 与无默认 feature 测试均通过。
+  - release 为 5,886,544 字节，相对初始基线增加 95,680 字节（约 1.65%），来自实际接入运行时和恢复入口；没有新增依赖。
+  - 使用方式和当前限制见 [runtime-cli.md](runtime-cli.md)。

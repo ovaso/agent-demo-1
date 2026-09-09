@@ -57,8 +57,8 @@ fn reopens_between_tool_calls_with_budget_and_conversation_intact() {
 fn file_lock_excludes_another_store_and_releases_on_drop() {
     let db = Database::new();
     let first = db.open();
-    let second = db.open();
     let lease = first.acquire().unwrap();
+    let second = db.open();
     assert!(matches!(second.acquire(), Err(RuntimeError::Busy)));
     drop(lease);
     assert!(second.acquire().is_ok());

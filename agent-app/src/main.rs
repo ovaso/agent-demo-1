@@ -13,7 +13,6 @@ use agent_core::{
     context::{Context, ContextStore, SqliteContextStore},
     memory::MarkdownMemoryStore,
     model::ModelProvider,
-    tool,
     tool::Registry,
     trace::{FileTraceSink, TraceSink},
 };
@@ -21,19 +20,7 @@ use agent_core::{
 mod output;
 mod provider;
 mod terminal;
-
-#[tool]
-fn echo(text: String) -> String {
-    text
-}
-
-#[tool(
-    finish_session,
-    description = "当用户明确表示要结束、退出、退下或今天到此为止时调用。summary 必须简洁概括本次会话的重要结论。"
-)]
-fn session_finish(summary: String) -> String {
-    summary
-}
+mod tools;
 
 fn main() {
     if let Err(error) = run() {
@@ -86,8 +73,10 @@ where
     let context_store = SqliteContextStore::open("agent-context.sqlite3")?;
     let memory_store = MarkdownMemoryStore::open("memories")?;
     let mut tools = Registry::new();
-    tools.register(echo_tool())?;
-    tools.register(session_finish_tool())?;
+    tools.register(tools::echo_tool())?;
+    tools.register(tools::session_finish_tool())?;
+    tools.register(tools::WriteFile::new())?;
+    tools.register(tools::RunCmd::new())?;
     let trace_path =
         env::var("RS_AGENT_TRACE_FILE").unwrap_or_else(|_| "agent-trace.jsonl".to_owned());
     let trace_sink = FileTraceSink::open(trace_path)?;

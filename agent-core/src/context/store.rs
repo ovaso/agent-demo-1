@@ -24,10 +24,12 @@ pub enum ContextStoreError {
 }
 
 impl ContextStoreError {
+    #[cfg(feature = "sqlite")]
     pub(crate) fn storage(error: impl Display) -> Self {
         Self::Storage(error.to_string())
     }
 
+    #[cfg(feature = "sqlite")]
     pub(crate) fn serialization(error: impl Display) -> Self {
         Self::Serialization(error.to_string())
     }

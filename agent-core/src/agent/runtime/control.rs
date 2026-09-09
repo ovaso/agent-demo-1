@@ -64,6 +64,11 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         if let LoopPhase::ToolInFlight { call_id } = &state.phase {
             return Err(RuntimeError::NeedsResolution(call_id.clone()));
         }
+        for call in state.pending.drain(..) {
+            state
+                .context
+                .push_tool(call.id(), call.name(), "未执行：任务已取消");
+        }
         state.status = RunStatus::Cancelled;
         self.commit(&mut state)?;
         Ok(state)

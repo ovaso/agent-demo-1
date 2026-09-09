@@ -64,7 +64,15 @@ impl RunStore for MemoryRunStore {
     }
     fn create(&mut self, state: &RunState) -> Result<(), RuntimeError> {
         check_size(state)?;
-        if self.states.contains_key(state.id()) {
+        if self.states.contains_key(state.id())
+            || self.states.values().any(|existing| {
+                existing.session_id == state.session_id
+                    && !matches!(
+                        existing.status,
+                        super::RunStatus::Completed | super::RunStatus::Cancelled
+                    )
+            })
+        {
             return Err(RuntimeError::Conflict);
         }
         self.states.insert(state.id().to_owned(), state.clone());
@@ -73,7 +81,7 @@ impl RunStore for MemoryRunStore {
     fn save(&mut self, state: &RunState, expected_revision: u64) -> Result<(), RuntimeError> {
         check_size(state)?;
         if self.states.get(state.id()).map(RunState::revision) != Some(expected_revision)
-            || state.revision != expected_revision + 1
+            || expected_revision.checked_add(1) != Some(state.revision)
         {
             return Err(RuntimeError::Conflict);
         }

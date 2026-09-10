@@ -67,7 +67,10 @@ pub(super) fn total_tokens(environment: &Environment) -> Result<Option<u64>, Str
 }
 pub(super) fn output_tokens(environment: &Environment) -> Result<u64, String> {
     let fallback = if environment.var("RS_AGENT_PROVIDER").as_deref() == Ok("anthropic") {
-        environment.var("ANTHROPIC_MAX_TOKENS").ok()
+        environment
+            .var("ANTHROPIC_MAX_TOKENS")
+            .ok()
+            .map(|value| value.parse::<u32>().unwrap_or(1024).to_string())
     } else {
         None
     };

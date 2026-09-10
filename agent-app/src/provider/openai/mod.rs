@@ -72,11 +72,14 @@ impl ModelProvider for OpenAiCompatibleProvider {
 
     fn complete(&mut self, request: ModelRequest<'_>) -> Result<ModelResponse, ModelError> {
         let body = self.request_body(&request)?;
+        let body = super::input::encode(&body, request.max_input_bytes())?;
+        let request_bytes = body.len();
         let response = self
             .client
             .post(format!("{}/chat/completions", self.base_url))
             .bearer_auth(&self.api_key)
-            .json(&body)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(body)
             .send()
             .map_err(ModelError::new)?
             .error_for_status()
@@ -91,7 +94,7 @@ impl ModelProvider for OpenAiCompatibleProvider {
             &self.model,
             &self.base_url,
         ));
-        Ok(parsed)
+        Ok(parsed.with_request_bytes(request_bytes))
     }
 
     fn stream(
@@ -105,11 +108,14 @@ impl ModelProvider for OpenAiCompatibleProvider {
             body["stream_options"] = json!({"include_usage": true});
         }
 
+        let body = super::input::encode(&body, request.max_input_bytes())?;
+        let request_bytes = body.len();
         let response = self
             .client
             .post(format!("{}/chat/completions", self.base_url))
             .bearer_auth(&self.api_key)
-            .json(&body)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(body)
             .send()
             .map_err(ModelError::new)?
             .error_for_status()
@@ -121,6 +127,6 @@ impl ModelProvider for OpenAiCompatibleProvider {
             &self.model,
             &self.base_url,
         ));
-        Ok(parsed)
+        Ok(parsed.with_request_bytes(request_bytes))
     }
 }

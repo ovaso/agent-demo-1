@@ -1,7 +1,9 @@
 //! 模型服务的抽象接口。
 
 mod continuation;
+mod input;
 mod response;
+pub use input::{InputDiagnostics, InputDigest};
 mod usage;
 pub use continuation::ModelContinuation;
 pub use response::{ModelResponse, StopReason};
@@ -20,6 +22,7 @@ pub struct ModelRequest<'a> {
     messages: Vec<Message>,
     memories: &'a [Memory],
     tools: &'a [ToolDefinition],
+    max_input_bytes: usize,
 }
 
 impl<'a> ModelRequest<'a> {
@@ -32,7 +35,16 @@ impl<'a> ModelRequest<'a> {
             messages,
             memories,
             tools,
+            max_input_bytes: 1024 * 1024,
         }
+    }
+
+    pub fn with_max_input_bytes(mut self, limit: usize) -> Self {
+        self.max_input_bytes = limit;
+        self
+    }
+    pub fn max_input_bytes(&self) -> usize {
+        self.max_input_bytes
     }
 
     pub fn messages(&self) -> &[Message] {

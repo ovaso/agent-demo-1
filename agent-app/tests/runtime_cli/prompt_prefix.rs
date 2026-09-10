@@ -52,3 +52,30 @@ fn resumed_and_failed_requests_keep_their_prepared_prefix() {
         }
     }
 }
+
+#[test]
+fn new_memory_matches_append_without_rewriting_the_previous_question() {
+    for provider in [Provider::OpenAi, Provider::Anthropic] {
+        let fixture = Fixture::new();
+        let mut store =
+            agent_core::memory::MarkdownMemoryStore::open(fixture.directory.join("memories"))
+                .unwrap();
+        use agent_core::memory::{Memory, MemoryStore};
+        store.save(Memory::new("a", "alpha evidence")).unwrap();
+        store.save(Memory::new("b", "beta evidence")).unwrap();
+        let result = fixture.run(
+            provider,
+            "alpha\nbeta\n/exit\n",
+            &[
+                Step::text("main", "alpha done"),
+                Step::text("main", "beta done"),
+            ],
+        );
+        assert!(
+            result.requests[1]["messages"]
+                .as_array()
+                .unwrap()
+                .starts_with(result.requests[0]["messages"].as_array().unwrap())
+        );
+    }
+}

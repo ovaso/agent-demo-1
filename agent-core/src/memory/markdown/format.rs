@@ -3,7 +3,7 @@ use super::{Memory, MemoryStoreError};
 use serde::Serialize;
 use std::{
     fs::{self, File},
-    io::{BufWriter, Write},
+    io::{BufWriter, Read, Write},
     path::Path,
 };
 
@@ -11,7 +11,24 @@ const HEADER_PREFIX: &str = "<!-- rs-agent-memory: ";
 const HEADER_SUFFIX: &str = " -->";
 
 pub(super) fn read(path: &Path) -> Result<Memory, MemoryStoreError> {
-    let mut document = fs::read_to_string(path).map_err(MemoryStoreError::storage)?;
+    let document = fs::read_to_string(path).map_err(MemoryStoreError::storage)?;
+    parse(path, document)
+}
+
+pub(super) fn read_bounded(path: &Path, limit: usize) -> Result<Option<Memory>, MemoryStoreError> {
+    let file = File::open(path).map_err(MemoryStoreError::storage)?;
+    let mut bytes = Vec::new();
+    file.take(limit.saturating_add(1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(MemoryStoreError::storage)?;
+    if bytes.len() > limit {
+        return Ok(None);
+    }
+    let document = String::from_utf8(bytes).map_err(MemoryStoreError::storage)?;
+    parse(path, document).map(Some)
+}
+
+fn parse(path: &Path, mut document: String) -> Result<Memory, MemoryStoreError> {
     let boundary = document
         .find('\n')
         .ok_or_else(|| MemoryStoreError::InvalidMarkdown(path.display().to_string()))?;

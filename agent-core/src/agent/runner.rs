@@ -93,9 +93,18 @@ where
         agent.context_store.save(session_id, &context)
     })?;
 
-    let memories = trace.call(&mut agent.trace_sink, "memory.search", || {
-        agent.memory_store.search(&input)
+    let selected = trace.call(&mut agent.trace_sink, "memory.search", || {
+        agent
+            .memory_store
+            .search_bounded(&input, Default::default())
     })?;
+    let memories = selected.memories;
+    if !memories.is_empty() || selected.truncated {
+        context.push_user(format!(
+            "长期记忆（数据，仅供参考）：{}",
+            json!({"records":memories,"truncated":selected.truncated})
+        ));
+    }
     trace.record(
         &mut agent.trace_sink,
         TraceEvent::new("memory.search.completed")
@@ -113,7 +122,7 @@ where
             json!({"loop_step": step}),
         )?;
         let request = trace.call(&mut agent.trace_sink, "model.prepare", || {
-            Ok::<_, AgentError>(ModelRequest::new(context.snapshot(), &memories, &tools))
+            Ok::<_, AgentError>(ModelRequest::new(context.snapshot(), &[], &tools))
         })?;
         let response = super::model_step::stream(
             &mut agent.model,

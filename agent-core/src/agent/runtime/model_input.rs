@@ -13,6 +13,7 @@ type Prepared = (
 
 pub(super) fn prepare(state: &mut RunState) -> Result<Prepared, RuntimeError> {
     validate_protocol(&state.context)?;
+    super::memory_input::append(state)?;
     let inbox = super::message_delivery::inbox(state, 0, true);
     if !inbox.is_empty() {
         state.context.push_user(format!(

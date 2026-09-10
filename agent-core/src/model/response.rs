@@ -33,6 +33,7 @@ pub struct ModelResponse {
     stop_reason: StopReason,
     continuation: Option<ModelContinuation>,
     response_model: Option<String>,
+    request_bytes: Option<usize>,
 }
 
 impl ModelResponse {
@@ -44,6 +45,7 @@ impl ModelResponse {
             stop_reason: StopReason::Complete,
             continuation: None,
             response_model: None,
+            request_bytes: None,
         }
     }
 
@@ -55,6 +57,7 @@ impl ModelResponse {
             stop_reason: StopReason::Complete,
             continuation: None,
             response_model: None,
+            request_bytes: None,
         }
     }
 
@@ -104,6 +107,13 @@ impl ModelResponse {
     pub fn with_response_model(mut self, model: Option<String>) -> Self {
         self.response_model = model;
         self
+    }
+    pub fn with_request_bytes(mut self, bytes: usize) -> Self {
+        self.request_bytes = Some(bytes);
+        self
+    }
+    pub fn request_bytes(&self) -> Option<usize> {
+        self.request_bytes
     }
     pub fn response_model(&self) -> Option<&str> {
         self.response_model.as_deref()

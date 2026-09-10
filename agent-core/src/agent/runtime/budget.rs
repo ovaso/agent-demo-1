@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 /// 根任务的资源限制；恢复使用已保存的配置及续期记录。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunLimits {
+    #[serde(default)]
+    pub memory_limits: crate::memory::MemorySearchLimits,
     #[serde(default = "default_delegations")]
     pub max_delegations: usize,
     /// 当前已获准的累计模型步数；无续期策略时也是硬上限。
@@ -21,6 +23,7 @@ pub struct RunLimits {
 impl Default for RunLimits {
     fn default() -> Self {
         Self {
+            memory_limits: Default::default(),
             max_delegations: default_delegations(),
             max_steps: 8,
             step_extension: None,
@@ -53,6 +56,11 @@ impl RunLimits {
             || self.max_checkpoint_bytes == 0
         {
             return Err(RuntimeError::Invalid("预算和大小上限必须大于零".into()));
+        }
+        if self.memory_limits.max_results > 0
+            && (self.memory_limits.max_entry_bytes == 0 || self.memory_limits.max_total_bytes == 0)
+        {
+            return Err(RuntimeError::Invalid("启用记忆时字节上限必须大于零".into()));
         }
         if let Some(policy) = &self.step_extension {
             policy.validate(self.max_steps)?;

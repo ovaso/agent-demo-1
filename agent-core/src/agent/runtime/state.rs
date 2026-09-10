@@ -79,6 +79,10 @@ pub struct RunState {
     pub(crate) tools: Vec<ToolDefinition>,
     pub(crate) context: Context,
     pub(crate) memories: Vec<Memory>,
+    #[serde(default)]
+    pub(crate) memories_bounded: bool,
+    #[serde(default)]
+    pub(crate) memories_truncated: bool,
     pub(crate) limits: RunLimits,
     pub(crate) budget: RunBudget,
     pub(crate) phase: LoopPhase,

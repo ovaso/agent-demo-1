@@ -66,6 +66,36 @@ impl MemoryStore for MarkdownMemoryStore {
         self.read_matching(Some(&query.to_lowercase()))
     }
 
+    fn search_bounded(
+        &self,
+        query: &str,
+        limits: super::MemorySearchLimits,
+    ) -> Result<super::MemorySelection, MemoryStoreError> {
+        if limits.max_results == 0 {
+            return Ok(super::MemorySelection::default());
+        }
+        let directory = self
+            .directory
+            .canonicalize()
+            .map_err(MemoryStoreError::storage)?;
+        let mut selection = super::selection::Selector::new(limits);
+        let query = query.to_lowercase();
+        for entry in fs::read_dir(directory).map_err(MemoryStoreError::storage)? {
+            let path = entry.map_err(MemoryStoreError::storage)?.path();
+            if path.extension().is_none_or(|extension| extension != "md") {
+                continue;
+            }
+            match format::read_bounded(&path, limits.max_entry_bytes)? {
+                Some(memory) if matches(&memory, &query) => {
+                    selection.add(memory.with_source(path.to_string_lossy().into_owned()))
+                }
+                Some(_) => {}
+                None => selection.truncated = true,
+            }
+        }
+        Ok(selection.finish())
+    }
+
     fn delete(&mut self, id: &str) -> Result<bool, MemoryStoreError> {
         validate_id(id)?;
         let path = self.path_for(id);

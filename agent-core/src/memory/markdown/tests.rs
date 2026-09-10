@@ -101,3 +101,46 @@ fn existing_format_round_trips_exact_content_and_encoded_ids() {
     assert!(store.delete(id).unwrap());
     assert!(store.get(id).unwrap().is_none());
 }
+
+#[test]
+fn bounded_memory_search_is_deterministic_and_does_not_load_large_files() {
+    let directory = Directory::new();
+    let mut store = directory.store();
+    for id in ["z", "b", "a"] {
+        store.save(Memory::new(id, "needle evidence")).unwrap();
+    }
+    store
+        .save(Memory::new("large", "needle ".repeat(100_000)))
+        .unwrap();
+    let result = store
+        .search_bounded(
+            "needle",
+            crate::memory::MemorySearchLimits {
+                max_results: 2,
+                max_total_bytes: 4096,
+                max_entry_bytes: 1024,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        result.memories.iter().map(Memory::id).collect::<Vec<_>>(),
+        ["a", "b"]
+    );
+    assert!(result.truncated);
+    assert!(
+        result
+            .memories
+            .iter()
+            .all(|m| Path::new(m.source().unwrap()).is_absolute())
+    );
+    let disabled = store
+        .search_bounded(
+            "needle",
+            crate::memory::MemorySearchLimits {
+                max_results: 0,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert!(disabled.memories.is_empty());
+}

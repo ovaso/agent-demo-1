@@ -67,3 +67,15 @@ RS_AGENT_ENV_FILE=.env.production cargo run -p agent-app
 用实际本地 `.env` 在独立临时目录完成了启动和建立检查点验证，未继承模型环境变量，模型请求数为 0；没有操作现有会话数据库或调用真实模型服务。
 
 同一 `rustc 1.96.1`、`aarch64-apple-darwin`、默认 features 和 release 命令下，产物由 6,174,368 增至 **6,175,424 字节**，增加 **1,056 字节（约 0.02%）**。release 配置未变，未测量或宣称运行耗时收益。
+
+## 输入与记忆边界
+
+| 变量 | 默认值 | 用途 |
+|---|---:|---|
+| `RS_AGENT_MAX_CONTEXT_BYTES` | `1048576` | 会话及完整 Provider 请求 JSON 的字节上限 |
+| `RS_AGENT_MEMORY_MAX_RESULTS` | `8` | 最多加载的记忆记录数；0 禁用检索 |
+| `RS_AGENT_MEMORY_MAX_BYTES` | `65536` | 选中记录字段的 UTF-8 总量上限 |
+| `RS_AGENT_MEMORY_ENTRY_BYTES` | `16384` | 单文件读取及单条记录上限 |
+
+运行时将记忆总量进一步限制在上下文字节上限的一半内，保留任务与工具空间。
+旧任务恢复时也会限制旧记忆；配置值随任务检查点保存，不由后续进程环境悄悄覆盖。

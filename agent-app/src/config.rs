@@ -4,6 +4,7 @@ use agent_core::agent::runtime::{RunLimits, StepExtensionPolicy};
 use std::{env, error::Error};
 
 mod environment;
+mod prompt;
 pub(crate) use environment::Environment;
 
 pub(crate) struct RuntimeConfig {
@@ -31,6 +32,12 @@ impl RuntimeConfig {
             session_id: session_id(environment),
             limits: RunLimits {
                 step_extension: step_extension_policy(environment, max_steps)?,
+                memory_limits: prompt::memory_limits(environment)?,
+                max_context_bytes: prompt::number(
+                    environment,
+                    "RS_AGENT_MAX_CONTEXT_BYTES",
+                    1024 * 1024,
+                )?,
                 max_delegations: environment
                     .var("RS_AGENT_MAX_DELEGATIONS")
                     .map_or(Ok(8), |value| value.parse::<usize>())?,

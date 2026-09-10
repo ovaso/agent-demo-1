@@ -38,7 +38,8 @@ pub(super) fn stream<M: ModelProvider, T: TraceSink>(
             .with_field("session_id", session_id)
             .with_field("loop_step", step as u64)
             .with_field("message_count", request.messages().len() as u64)
-            .with_field("tool_count", request.tools().len() as u64),
+            .with_field("tool_count", request.tools().len() as u64)
+            .with_field("input", serde_json::json!(request.diagnostics()?)),
     )?;
 
     let model_started = Instant::now();
@@ -62,6 +63,7 @@ pub(super) fn stream<M: ModelProvider, T: TraceSink>(
         sink,
         TraceEvent::new("model.response.completed")
             .with_field("response_model", response.response_model())
+            .with_field("request_bytes", response.request_bytes())
             .with_field("stop_reason", format!("{:?}", response.stop_reason()))
             .with_field("session_id", session_id)
             .with_field("loop_step", step as u64)

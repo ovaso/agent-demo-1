@@ -1,6 +1,8 @@
 //! Agent 的长期记忆模型与存储后端。
 
 mod markdown;
+mod selection;
+pub use selection::{MemorySearchLimits, MemorySelection};
 #[cfg(feature = "sqlite")]
 mod sqlite;
 
@@ -21,6 +23,8 @@ pub struct Memory {
     id: String,
     content: String,
     tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source: Option<String>,
 }
 
 impl Memory {
@@ -29,12 +33,28 @@ impl Memory {
             id: id.into(),
             content: content.into(),
             tags: Vec::new(),
+            source: None,
         }
     }
 
     pub fn with_tag(mut self, tag: impl Into<String>) -> Self {
         self.tags.push(tag.into());
         self
+    }
+
+    pub fn source(&self) -> Option<&str> {
+        self.source.as_deref()
+    }
+    pub(crate) fn with_source(mut self, source: String) -> Self {
+        self.source = Some(source);
+        self
+    }
+    pub(crate) fn bytes(&self) -> usize {
+        self.id
+            .len()
+            .saturating_add(self.content.len())
+            .saturating_add(self.source.as_ref().map_or(0, String::len))
+            .saturating_add(self.tags.iter().map(String::len).sum::<usize>())
     }
 
     pub fn id(&self) -> &str {
@@ -56,6 +76,17 @@ pub trait MemoryStore {
     fn save(&mut self, memory: Memory) -> Result<(), MemoryStoreError>;
     fn list(&self) -> Result<Vec<Memory>, MemoryStoreError>;
     fn search(&self, query: &str) -> Result<Vec<Memory>, MemoryStoreError>;
+    /// Backends should override this to also bound retrieval I/O and allocations.
+    fn search_bounded(
+        &self,
+        query: &str,
+        limits: MemorySearchLimits,
+    ) -> Result<MemorySelection, MemoryStoreError> {
+        if limits.max_results == 0 {
+            return Ok(MemorySelection::default());
+        }
+        Ok(limits.select(self.search(query)?))
+    }
     fn delete(&mut self, id: &str) -> Result<bool, MemoryStoreError>;
 }
 

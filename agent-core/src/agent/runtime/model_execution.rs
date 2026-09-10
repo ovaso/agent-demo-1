@@ -77,7 +77,8 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         }
         state.phase = LoopPhase::ModelInFlight;
         self.commit(state)?;
-        let request = ModelRequest::new(messages, &state.memories, &tools);
+        let request = ModelRequest::new(messages, &[], &tools)
+            .with_max_input_bytes(state.limits.max_context_bytes);
         let actor = state.actor();
         let response = model_step::stream(
             &mut self.model,

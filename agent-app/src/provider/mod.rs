@@ -2,6 +2,7 @@
 
 mod anthropic;
 mod continuation;
+mod input;
 mod openai;
 mod stop_reason;
 

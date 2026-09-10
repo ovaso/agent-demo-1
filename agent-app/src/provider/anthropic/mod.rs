@@ -87,11 +87,14 @@ impl ModelProvider for AnthropicProvider {
         );
         headers.insert("anthropic-version", HeaderValue::from_static(API_VERSION));
 
+        let body = super::input::encode(&body, request.max_input_bytes())?;
+        let request_bytes = body.len();
         let response = self
             .client
             .post(format!("{}/messages", self.base_url))
             .headers(headers)
-            .json(&body)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(body)
             .send()
             .map_err(ModelError::new)?
             .error_for_status()
@@ -106,7 +109,7 @@ impl ModelProvider for AnthropicProvider {
             &self.model,
             &self.base_url,
         ));
-        Ok(parsed)
+        Ok(parsed.with_request_bytes(request_bytes))
     }
 
     fn stream(
@@ -123,11 +126,14 @@ impl ModelProvider for AnthropicProvider {
         );
         headers.insert("anthropic-version", HeaderValue::from_static(API_VERSION));
 
+        let body = super::input::encode(&body, request.max_input_bytes())?;
+        let request_bytes = body.len();
         let response = self
             .client
             .post(format!("{}/messages", self.base_url))
             .headers(headers)
-            .json(&body)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(body)
             .send()
             .map_err(ModelError::new)?
             .error_for_status()
@@ -139,6 +145,6 @@ impl ModelProvider for AnthropicProvider {
             &self.model,
             &self.base_url,
         ));
-        Ok(parsed)
+        Ok(parsed.with_request_bytes(request_bytes))
     }
 }

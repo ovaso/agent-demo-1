@@ -16,6 +16,7 @@ mod graph_control;
 mod graph_execution;
 #[cfg(test)]
 mod graph_tests;
+mod memory_input;
 mod message_delivery;
 mod message_tools;
 mod model_execution;

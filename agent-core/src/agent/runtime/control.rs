@@ -67,6 +67,13 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         }
         context.push_user(input);
         super::serialization::check(&context, limits.max_context_bytes)?;
+        let memories = self
+            .memory
+            .search_bounded(
+                input,
+                limits.memory_limits.within(limits.max_context_bytes / 2),
+            )
+            .map_err(RuntimeError::storage)?;
         let state = RunState {
             prompt_history: Default::default(),
             collaboration: Default::default(),
@@ -89,7 +96,9 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             model_name: self.model.model_name().into(),
             tools: self.tools.definitions(),
             context,
-            memories: self.memory.search(input).map_err(RuntimeError::storage)?,
+            memories: memories.memories,
+            memories_truncated: memories.truncated,
+            memories_bounded: true,
             limits,
             budget: RunBudget::default(),
             phase: LoopPhase::Model,

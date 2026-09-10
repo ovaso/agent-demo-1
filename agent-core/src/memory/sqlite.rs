@@ -48,6 +48,7 @@ impl SqliteMemoryStore {
             id: row.get(0)?,
             content: row.get(1)?,
             tags,
+            source: None,
         })
     }
 }
@@ -116,6 +117,32 @@ impl MemoryStore for SqliteMemoryStore {
             .map_err(MemoryStoreError::storage)?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(MemoryStoreError::storage)
+    }
+
+    fn search_bounded(
+        &self,
+        query: &str,
+        limits: super::MemorySearchLimits,
+    ) -> Result<super::MemorySelection, MemoryStoreError> {
+        if limits.max_results == 0 {
+            return Ok(super::MemorySelection::default());
+        }
+        let cap = i64::try_from(limits.max_entry_bytes).unwrap_or(i64::MAX);
+        let mut selection = super::selection::Selector::new(limits);
+        selection.truncated = self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM agent_memories WHERE length(CAST(id AS BLOB)) + length(CAST(content AS BLOB)) + length(CAST(tags_json AS BLOB)) > ?1)",
+            [cap], |row| row.get(0)).map_err(MemoryStoreError::storage)?;
+        let mut statement = self.connection.prepare(
+            "SELECT id, content, tags_json FROM agent_memories WHERE CASE WHEN length(CAST(id AS BLOB)) + length(CAST(content AS BLOB)) + length(CAST(tags_json AS BLOB)) <= ?2 THEN (lower(id) LIKE ?1 OR lower(content) LIKE ?1 OR lower(tags_json) LIKE ?1) ELSE 0 END ORDER BY id"
+        ).map_err(MemoryStoreError::storage)?;
+        let query = format!("%{}%", query.to_lowercase());
+        let rows = statement
+            .query_map(rusqlite::params![query, cap], Self::decode_row)
+            .map_err(MemoryStoreError::storage)?;
+        for row in rows {
+            selection.add(row.map_err(MemoryStoreError::storage)?);
+        }
+        Ok(selection.finish())
     }
 
     fn delete(&mut self, id: &str) -> Result<bool, MemoryStoreError> {

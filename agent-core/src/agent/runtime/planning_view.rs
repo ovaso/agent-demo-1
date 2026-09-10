@@ -18,7 +18,8 @@ struct Overview<'a> {
     actor: &'a str,
     agent_budget: Option<&'a AgentPolicy>,
     board_sequence: u64,
-    execution_tool_definitions: Vec<&'a ToolDefinition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    execution_tool_definitions: Option<Vec<&'a ToolDefinition>>,
     goal: &'a str,
     intent: WorkIntent,
     mode: ExecutionMode,
@@ -43,6 +44,8 @@ struct NodeView<'a> {
     attempts: u32,
     id: &'a str,
     output: &'a str,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    output_truncated: bool,
     status: NodeStatus,
     validation: Option<ValidationKind>,
 }
@@ -67,7 +70,8 @@ pub(super) fn message(state: &RunState) -> Result<Message, RuntimeError> {
         .map(|(id, node)| NodeView {
             attempts: node.attempts,
             id,
-            output: &node.output,
+            output: preview(&node.output),
+            output_truncated: node.output.len() > 512,
             status: node.status,
             validation: node.validation,
         })
@@ -78,11 +82,14 @@ pub(super) fn message(state: &RunState) -> Result<Message, RuntimeError> {
         actor: &actor,
         agent_budget: state.agent_policy(),
         board_sequence: state.blackboard.sequence(),
-        execution_tool_definitions: state
-            .tools
-            .iter()
-            .filter(|tool| active_id.is_none() || state.tool_allowed(tool.name()))
-            .collect(),
+        execution_tool_definitions: (state.intent == WorkIntent::PlanOnly && active_id.is_none())
+            .then(|| {
+                state
+                    .tools
+                    .iter()
+                    .filter(|tool| !state.tool_allowed(tool.name()))
+                    .collect()
+            }),
         goal: &state.goal,
         intent: state.intent,
         mode: state.routing.mode(),
@@ -114,4 +121,12 @@ pub(super) fn message(state: &RunState) -> Result<Message, RuntimeError> {
         state.limits.max_context_bytes,
     )
     .map(Message::user)
+}
+
+fn preview(text: &str) -> &str {
+    let mut end = text.len().min(512);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
 }

@@ -114,6 +114,14 @@ fn planning_context_exposes_only_read_capabilities_and_keeps_saved_history_uncha
     assert!(!tools.iter().any(|tool| tool.name() == "count"));
     assert!(tools.iter().any(|tool| tool.name() == "runtime_plan"));
     assert_eq!(messages.len(), state.context().len() + 2);
+    let data: serde_json::Value = serde_json::from_str(
+        messages[1]
+            .content()
+            .strip_prefix("运行状态（数据）：")
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(data["execution_tool_definitions"][0]["name"], "count");
     assert_eq!(
         state.context().snapshot(),
         vec![crate::context::Message::user("go")]
@@ -154,7 +162,7 @@ fn planning_view_keeps_the_data_contract_and_hides_unrelated_nodes_from_workers(
         view(&root),
         serde_json::json!({
             "active_node":null,"actor":"main","agent_budget":null,"board_sequence":0,
-            "execution_tool_definitions":root.tools,"goal":"go","intent":"Execute",
+            "goal":"go","intent":"Execute",
             "mode":"graph","model_calls_remaining":2,"plan":plan,"plan_version":1,
             "nodes":[
                 {"attempts":0,"id":"a","output":"","status":"Pending","validation":null},
@@ -169,4 +177,24 @@ fn planning_view_keeps_the_data_contract_and_hides_unrelated_nodes_from_workers(
     assert_eq!(view["nodes"].as_array().unwrap().len(), 1);
     assert_eq!(view["nodes"][0]["id"], "a");
     assert_eq!(view["nodes"][0]["status"], "Running");
+}
+
+#[test]
+fn execution_view_does_not_repeat_callable_tool_schemas() {
+    let (mut runtime, _) = runtime(MemoryRunStore::new(), vec![]);
+    let state = runtime
+        .start_with_options(
+            "compact",
+            "session",
+            "go",
+            Context::new(),
+            RunOptions {
+                planning: true,
+                limits: RunLimits::new(2),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let view = super::planning_view::message(&state).unwrap();
+    assert!(!view.content().contains("execution_tool_definitions"));
 }

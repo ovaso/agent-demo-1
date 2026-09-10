@@ -18,3 +18,8 @@ assistant 消息保存，跨进程 resume 后按原协议回传。续接数据�
 请求模型，不保存 URL 凭据或查询参数；改变绑定时需要新的会话。
 trace 的 response_model 记录服务商返回的模型名，原有 model 记录请求配置。
 Provider 的流式与完整响应均限制为最多 8 MiB，超限或中断不会执行部分工具。
+
+执行状态不再重复传递已在 tools 中声明的 schema。PlanOnly 协调者仅保留
+尚未开放执行的工具目录；子 Agent 仍由其工具权限限制能力。
+节点结果默认只携带至多 512 字节的 UTF-8 预览，output_truncated 标记截断，
+需要完整证据时使用 runtime_result 分页读取。

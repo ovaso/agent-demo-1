@@ -24,3 +24,20 @@
 格式检查、workspace Clippy -D warnings、workspace 测试通过；agent-core 无默认 features、agent-app 无默认 features 测试通过。整合工具重构后另行执行全局检查。
 
 后续用官网同一模型、同一 API Key 的逐请求数据核对实际输入/缓存读/输出用量；区分首轮、普通续跑、压缩及不同 actor。思考强度默认沿用服务商设置。输入 Token 命中率 = 缓存读取 Token / 全部输入 Token，不能与请求命中次数比例混用。
+
+## 本地提交记录
+
+| 提交 | 变更 |
+|---|---|
+| b5a7101 | fix(usage): report DeepSeek cache reads and weighted input hit ratio |
+| 96fb6d3 | fix(runtime): pause incomplete model responses before tool execution |
+| dbe218e | feat(model): persist provider continuation data across resume |
+| 25197fa | perf(prompt): remove duplicate execution schemas and bound node previews |
+| 9436e93 | feat(runtime): persist per-agent prompt snapshots and state deltas |
+| a651905 | feat(input): bound memory retrieval and complete model request size |
+| 84c55cf | feat(context): compact history at watermarks while preserving instructions |
+| e4c9e41 | feat(budget): persist shared token reservations and output limits |
+| 04640c1 | feat(provider): configure cache boundaries and reasoning policy |
+| bdc9b33 | fix(config): preserve legacy Anthropic defaults and record cache benchmarks |
+
+整合保留了另一批工具重构的未提交内容。整合后的 workspace 269 项测试通过，关闭 SQLite 后 79 项核心测试通过，Clippy -D warnings 与格式检查通过。

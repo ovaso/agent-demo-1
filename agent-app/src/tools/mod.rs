@@ -1,9 +1,13 @@
 use agent_core::tool;
 
+mod read;
 mod run_cmd;
+mod search;
 mod write_file;
 
+pub(super) use read::{ListDirectory, ReadFile};
 pub(super) use run_cmd::RunCmd;
+pub(super) use search::SearchFiles;
 pub(super) use write_file::WriteFile;
 
 #[tool]

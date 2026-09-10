@@ -56,9 +56,33 @@ pub struct ToolDefinition {
     name: String,
     description: String,
     parameters: Vec<Parameter>,
+    #[serde(default)]
+    read_only: bool,
 }
 
 impl ToolDefinition {
+    pub fn new(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        parameters: Vec<Parameter>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            description: description.into(),
+            parameters,
+            read_only: false,
+        }
+    }
+
+    pub fn with_read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
+    }
+
+    pub fn is_read_only(&self) -> bool {
+        self.read_only
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -191,12 +215,17 @@ pub trait Tool: Send + Sync {
     fn description(&self) -> &str;
     fn parameters(&self) -> &[Parameter];
     fn invoke(&self, arguments: &Arguments) -> Result<ToolOutput, ToolError>;
+    /// 仅纯读取能力可显式声明；默认在 Plan Mode 中禁止执行。
+    fn is_read_only(&self) -> bool {
+        false
+    }
 
     fn definition(&self) -> ToolDefinition {
         ToolDefinition {
             name: self.name().to_owned(),
             description: self.description().to_owned(),
             parameters: self.parameters().to_vec(),
+            read_only: self.is_read_only(),
         }
     }
 }

@@ -101,3 +101,33 @@ fn cli_requires_settling_active_task_and_cancel_preserves_tool_protocol() {
         "next done"
     );
 }
+
+#[test]
+fn cli_plan_survives_restart_and_requires_execute_without_resetting_budget() {
+    let directory = Directory::new();
+    let plan = r#"{"goal":"inspect","requirements":["checked"],"tasks":[{"id":"a","description":"inspect","acceptance":["checked"],"action":{"kind":"agent","prompt":"inspect"}}]}"#;
+    let response = ModelResponse::tool_calls(vec![
+        ToolCall::new(
+            "p",
+            "runtime_plan",
+            Arguments::new()
+                .with("expected_revision", "0")
+                .with("plan", plan),
+        ),
+        ToolCall::new("ready", "runtime_plan_ready", Arguments::new()),
+    ]);
+    let mut first = directory.session(vec![response]);
+    first.handle(parse("/plan inspect").unwrap()).unwrap();
+    drop(first);
+    let mut second = directory.session(vec![ModelResponse::text("executed")]);
+    second.handle(parse("/resume").unwrap()).unwrap();
+    let state = second.runtime.store().latest("session").unwrap().unwrap();
+    assert_eq!(state.status(), &RunStatus::Paused(PauseReason::PlanReady));
+    assert_eq!(state.budget().model_calls(), 1);
+    second.handle(parse("/budget 2").unwrap()).unwrap();
+    second.handle(parse("/execute").unwrap()).unwrap();
+    let state = second.runtime.store().latest("session").unwrap().unwrap();
+    assert_eq!(state.result().unwrap().text(), "executed");
+    assert_eq!(state.budget().model_calls(), 2);
+    assert_eq!(state.plans().revision(), 1);
+}

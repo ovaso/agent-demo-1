@@ -17,6 +17,7 @@ pub enum PauseReason {
     Model(String),
     Limit(String),
     ToolResultUnknown(String),
+    PlanReady,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -41,6 +42,12 @@ pub enum LoopPhase {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunState {
     #[serde(default)]
+    pub(crate) goal: String,
+    #[serde(default)]
+    pub(crate) intent: super::WorkIntent,
+    #[serde(default)]
+    pub(crate) planning: bool,
+    #[serde(default)]
     pub(crate) plans: super::super::planning::PlanHistory,
     #[serde(default)]
     pub(crate) blackboard: super::super::blackboard::Blackboard,
@@ -61,6 +68,12 @@ pub struct RunState {
 }
 
 impl RunState {
+    pub fn goal(&self) -> &str {
+        &self.goal
+    }
+    pub fn intent(&self) -> super::WorkIntent {
+        self.intent
+    }
     pub fn plans(&self) -> &super::super::planning::PlanHistory {
         &self.plans
     }
@@ -103,6 +116,9 @@ impl RunState {
             return Err(RuntimeError::Invalid("不兼容的检查点格式版本".into()));
         }
         self.limits.validate()?;
+        if self.intent == super::WorkIntent::PlanOnly && !self.planning {
+            return Err(RuntimeError::Invalid("只规划检查点缺少规划能力".into()));
+        }
         if self.id.trim().is_empty() || self.session_id.trim().is_empty() {
             return Err(RuntimeError::Invalid("运行和会话 ID 不能为空".into()));
         }

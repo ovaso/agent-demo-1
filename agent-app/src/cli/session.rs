@@ -1,6 +1,8 @@
 use super::commands::Command;
 use agent_core::{
-    agent::runtime::{RunLimits, RunState, RunStatus, Runtime, SqliteRunStore},
+    agent::runtime::{
+        RunLimits, RunOptions, RunState, RunStatus, Runtime, SqliteRunStore, WorkIntent,
+    },
     memory::MarkdownMemoryStore,
     model::ModelProvider,
     tool::{Registry, ToolOutput},
@@ -33,6 +35,9 @@ impl<M: ModelProvider> Session<M> {
         tools.register(crate::tools::session_finish_tool())?;
         tools.register(crate::tools::WriteFile::new())?;
         tools.register(crate::tools::RunCmd::new())?;
+        tools.register(crate::tools::ReadFile::new())?;
+        tools.register(crate::tools::ListDirectory::new())?;
+        tools.register(crate::tools::SearchFiles::new())?;
         let max_steps =
             env::var("RS_AGENT_MAX_STEPS").map_or(Ok(8), |value| value.parse::<u64>())?;
         if max_steps == 0 {
@@ -57,16 +62,38 @@ impl<M: ModelProvider> Session<M> {
                 println!("当前会话历史已清除。");
             }
             Command::Input(input) => {
-                let state = self.start(input)?;
+                let state = self.start(input, WorkIntent::Execute)?;
                 return self.execute(state.id(), false);
             }
             Command::Start(input) => {
-                let state = self.start(input)?;
+                let state = self.start(input, WorkIntent::Execute)?;
                 super::print_status(&state);
             }
             Command::Status(id) => {
                 let id = self.id(id)?;
                 super::print_status(&self.runtime.state(&id)?);
+            }
+            Command::Plan(Some(input)) => {
+                let state = self.start(input, WorkIntent::PlanOnly)?;
+                return self.execute(state.id(), false);
+            }
+            Command::Plan(None) => {
+                let id = self.id(None)?;
+                super::print_plan(&self.runtime.state(&id)?);
+            }
+            Command::Execute(id) => {
+                let id = self.id(id)?;
+                self.runtime.execute_plan(&id)?;
+                return self.execute(&id, false);
+            }
+            Command::Board(key) => {
+                let id = self.id(None)?;
+                let state = self.runtime.state(&id)?;
+                let entries = match key {
+                    Some(key) => state.blackboard().latest(key).into_iter().collect(),
+                    None => state.blackboard().changes(0, 32),
+                };
+                println!("{}", serde_json::to_string_pretty(&entries)?);
             }
             Command::Resume(id) => {
                 let id = self.id(id)?;
@@ -116,7 +143,7 @@ impl<M: ModelProvider> Session<M> {
         }
     }
 
-    fn start(&mut self, input: &str) -> Result<RunState, Box<dyn Error>> {
+    fn start(&mut self, input: &str, intent: WorkIntent) -> Result<RunState, Box<dyn Error>> {
         if self
             .runtime
             .store()
@@ -133,9 +160,17 @@ impl<M: ModelProvider> Session<M> {
             .session_context(&self.session_id)?
             .unwrap_or_default();
         let id = new_id();
-        let state =
-            self.runtime
-                .start(&id, &self.session_id, input, context, self.limits.clone())?;
+        let state = self.runtime.start_with_options(
+            &id,
+            &self.session_id,
+            input,
+            context,
+            RunOptions {
+                limits: self.limits.clone(),
+                intent,
+                planning: true,
+            },
+        )?;
         println!("运行：{id}");
         Ok(state)
     }

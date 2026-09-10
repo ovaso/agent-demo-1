@@ -31,10 +31,18 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             self.commit(state)?;
             return Err(error);
         }
+        let (messages, tools) = match super::planning_prompt::request_context(state) {
+            Ok(request) => request,
+            Err(error) => {
+                state.status = RunStatus::Paused(PauseReason::Limit(error.to_string()));
+                self.commit(state)?;
+                return Err(error);
+            }
+        };
         state.budget.model_calls += 1;
         state.phase = LoopPhase::ModelInFlight;
         self.commit(state)?;
-        let request = ModelRequest::new(state.context.snapshot(), &state.memories, &state.tools);
+        let request = ModelRequest::new(messages, &state.memories, &tools);
         let response = model_step::stream(
             &mut self.model,
             &mut self.trace,
@@ -77,6 +85,14 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 return Err(AgentError::EmptyModelResponse.into());
             };
             state.context.push_assistant(&text);
+            if state.intent == super::WorkIntent::PlanOnly {
+                state.status = RunStatus::Paused(if state.plans.current().is_some() {
+                    PauseReason::PlanReady
+                } else {
+                    PauseReason::Model("需要通过 runtime_plan 提交结构化计划".into())
+                });
+                return self.commit(state);
+            }
             state.result = Some(AgentResult {
                 text,
                 steps: state.budget.model_calls as usize,
@@ -108,6 +124,45 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             return self.commit(state);
         }
         state.budget.tool_calls += 1;
+        if state.planning && call.name().starts_with("runtime_") {
+            trace
+                .start(
+                    &mut self.trace,
+                    "runtime.control",
+                    json!({"call_id":call.id(),"tool_name":call.name(),"logical_run_id":state.id}),
+                )
+                .map_err(RuntimeError::storage)?;
+            let response = super::planning_tools::invoke(state, &call);
+            let (text, ready) = match response {
+                Ok(output) => (output.text, output.plan_ready),
+                Err(error) => (format!("运行时工具失败：{error}"), false),
+            };
+            self.accept_tool(state, ToolOutput::text(text))?;
+            if ready {
+                for pending in state.pending.drain(..) {
+                    state
+                        .context
+                        .push_tool(pending.id(), pending.name(), "未执行：计划已交付");
+                }
+                state.phase = LoopPhase::Model;
+                state.status = RunStatus::Paused(PauseReason::PlanReady);
+            }
+            self.commit(state)?;
+            return trace
+                .end(&mut self.trace, None)
+                .map_err(RuntimeError::storage);
+        }
+        let allowed = state.tools.iter().find(|tool| tool.name() == call.name());
+        if allowed.is_none()
+            || (state.intent == super::WorkIntent::PlanOnly
+                && !allowed.is_some_and(|tool| tool.is_read_only()))
+        {
+            self.accept_tool(
+                state,
+                ToolOutput::text("拒绝执行：工具不在当前任务允许的能力集合中"),
+            )?;
+            return self.commit(state);
+        }
         state.phase = LoopPhase::ToolInFlight {
             call_id: call.id().into(),
         };

@@ -91,12 +91,39 @@ fn print_status(state: &RunState) {
     if let Some(result) = state.result() {
         println!("结果：{}", result.text());
     }
+    if state.status() == &RunStatus::Paused(agent_core::agent::runtime::PauseReason::PlanReady) {
+        print_plan(state);
+        println!("计划已保存；/execute 开始执行，/resume 保持只规划边界。");
+    }
+}
+
+fn print_plan(state: &RunState) {
+    match state.plans().current() {
+        Some(plan) => {
+            println!("计划 v{}：{}", state.plans().revision(), plan.goal);
+            println!("总体要求：{}", plan.requirements.join("；"));
+            for task in &plan.tasks {
+                println!(
+                    "  [{}] {}\n    依赖：{}；验收：{}",
+                    task.id,
+                    task.description,
+                    task.depends_on.join(", "),
+                    task.acceptance.join("；")
+                );
+            }
+        }
+        None => println!("尚未提交结构化计划。"),
+    }
 }
 
 fn help() {
     println!(
         "命令：
   /start <任务>          建立任务，随后可用 /step 逐步执行
+  /plan <任务>          只调查和规划，不执行写入
+  /plan                 查看当前计划
+  /execute [运行 ID]    执行已交付的计划，沿用原预算
+  /board [记录标识]     查看共享记录（未指定时最多 32 条）
   /status [运行 ID]     查看状态、预算和最终结果
   /resume [运行 ID]     恢复执行，沿用原预算
   /step [运行 ID]       推进一个阶段（暂停后需 /resume）

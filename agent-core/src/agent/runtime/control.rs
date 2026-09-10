@@ -14,11 +14,51 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         id: &str,
         session_id: &str,
         input: &str,
-        mut context: Context,
+        context: Context,
         limits: RunLimits,
     ) -> Result<RunState, RuntimeError> {
+        self.start_with_options(
+            id,
+            session_id,
+            input,
+            context,
+            super::RunOptions {
+                limits,
+                ..Default::default()
+            },
+        )
+    }
+
+    pub fn start_with_options(
+        &mut self,
+        id: &str,
+        session_id: &str,
+        input: &str,
+        mut context: Context,
+        options: super::RunOptions,
+    ) -> Result<RunState, RuntimeError> {
         let _lease = self.store.acquire()?;
+        let limits = options.limits;
         limits.validate()?;
+        if options.intent == super::WorkIntent::PlanOnly && !options.planning {
+            return Err(RuntimeError::Invalid("只规划任务必须启用规划能力".into()));
+        }
+        if options.planning && limits.max_tool_output_bytes < 16 * 1024 {
+            return Err(RuntimeError::Invalid(
+                "规划工具结果上限至少为 16 KiB".into(),
+            ));
+        }
+        if options.planning
+            && self
+                .tools
+                .definitions()
+                .iter()
+                .any(|tool| tool.name().starts_with("runtime_"))
+        {
+            return Err(RuntimeError::Invalid(
+                "runtime_ 工具名前缀保留给运行时".into(),
+            ));
+        }
         if id.trim().is_empty() || session_id.trim().is_empty() {
             return Err(RuntimeError::Invalid("运行和会话 ID 不能为空".into()));
         }
@@ -28,6 +68,9 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         context.push_user(input);
         super::store::bounded_json(&context, limits.max_context_bytes)?;
         let state = RunState {
+            goal: input.into(),
+            intent: options.intent,
+            planning: options.planning,
             plans: Default::default(),
             blackboard: Default::default(),
             format_version: super::state::FORMAT_VERSION,

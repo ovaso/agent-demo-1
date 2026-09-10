@@ -5,6 +5,11 @@ mod control;
 mod engine;
 mod error;
 mod execution;
+mod options;
+mod planning_prompt;
+#[cfg(test)]
+mod planning_tests;
+mod planning_tools;
 #[cfg(feature = "sqlite")]
 mod sqlite;
 #[cfg(all(test, feature = "sqlite"))]
@@ -17,6 +22,7 @@ mod workspace;
 
 pub use budget::{RunBudget, RunLimits};
 pub use error::RuntimeError;
+pub use options::{RunOptions, WorkIntent};
 #[cfg(feature = "sqlite")]
 pub use sqlite::SqliteRunStore;
 pub use state::{LoopPhase, PauseReason, RunState, RunStatus};

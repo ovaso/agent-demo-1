@@ -2,6 +2,9 @@
 pub(super) enum Command<'a> {
     Input(&'a str),
     Start(&'a str),
+    Plan(Option<&'a str>),
+    Execute(Option<&'a str>),
+    Board(Option<&'a str>),
     Help,
     Trace,
     Reset,
@@ -24,6 +27,13 @@ pub(super) fn parse(input: &str) -> Result<Command<'_>, String> {
     let (name, rest) = split(trimmed);
     match name {
         "/start" if !rest.is_empty() => Ok(Command::Start(rest)),
+        "/plan" => Ok(Command::Plan(if rest.is_empty() {
+            None
+        } else {
+            Some(rest)
+        })),
+        "/execute" => Ok(Command::Execute(optional_id(rest)?)),
+        "/board" => Ok(Command::Board(optional_id(rest)?)),
         "/help" if rest.is_empty() => Ok(Command::Help),
         "/trace" if rest.is_empty() => Ok(Command::Trace),
         "/reset" if rest.is_empty() => Ok(Command::Reset),

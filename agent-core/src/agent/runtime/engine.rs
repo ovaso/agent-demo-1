@@ -34,8 +34,19 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         let _lease = self.store.acquire()?;
         let mut state = self.state(id)?;
         Self::check_editable(&state)?;
-        if self.model.model_name() != state.model_name || self.tools.definitions() != state.tools {
+        let definitions = self.tools.definitions();
+        if self.model.model_name() != state.model_name
+            || state.tools.iter().any(|saved| {
+                definitions
+                    .iter()
+                    .find(|current| current.name() == saved.name())
+                    != Some(saved)
+            })
+        {
             return Err(RuntimeError::Invalid("模型或工具定义与检查点不一致".into()));
+        }
+        if state.status == RunStatus::Paused(PauseReason::PlanReady) {
+            return Ok(state);
         }
         if let LoopPhase::ToolInFlight { call_id } = &state.phase {
             let id = call_id.clone();

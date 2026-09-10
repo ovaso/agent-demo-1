@@ -22,11 +22,11 @@ pub(super) struct Session<M> {
     pub(super) runtime: AppRuntime<M>,
     pub(super) session_id: String,
     pub(super) limits: RunLimits,
+    pub(super) trace_path: String,
 }
 
 impl<M: ModelProvider> Session<M> {
-    pub(super) fn new(model: M) -> Result<Self, Box<dyn Error>> {
-        let config = RuntimeConfig::from_environment()?;
+    pub(super) fn new(model: M, config: RuntimeConfig) -> Result<Self, Box<dyn Error>> {
         let store = SqliteRunStore::open(config.db_path)?;
         let memory = MarkdownMemoryStore::open(config.memory_directory)?;
         let mut tools = Registry::new();
@@ -39,11 +39,12 @@ impl<M: ModelProvider> Session<M> {
         tools.register(crate::tools::SearchFiles::new())?;
         tools.register(crate::tools::RunCheck::new())?;
         let runtime = Runtime::new(model, store, memory, tools)
-            .with_trace_sink(FileTraceSink::open(config.trace_path)?);
+            .with_trace_sink(FileTraceSink::open(&config.trace_path)?);
         Ok(Self {
             runtime,
             session_id: config.session_id,
             limits: config.limits,
+            trace_path: config.trace_path,
         })
     }
 
@@ -51,7 +52,7 @@ impl<M: ModelProvider> Session<M> {
         match command {
             Command::Exit => return Ok(true),
             Command::Help => view::help(),
-            Command::Trace => view::show_trace()?,
+            Command::Trace => view::show_trace(&self.trace_path)?,
             Command::Reset => {
                 self.runtime.store_mut().reset_session(&self.session_id)?;
                 println!("当前会话历史已清除。");

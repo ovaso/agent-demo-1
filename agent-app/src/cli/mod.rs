@@ -12,8 +12,11 @@ mod session;
 mod tests;
 mod view;
 
-pub(crate) fn run<M: ModelProvider>(model: M) -> Result<(), Box<dyn Error>> {
-    let mut session = session::Session::new(model)?;
+pub(crate) fn run<M: ModelProvider>(
+    model: M,
+    config: config::RuntimeConfig,
+) -> Result<(), Box<dyn Error>> {
+    let mut session = session::Session::new(model, config)?;
     println!("rs-agent 已启动。Enter 发送，Ctrl+J / Alt+Enter 换行。输入 /help 查看命令。");
     if let Some(state) = session.runtime.store().latest(&session.session_id)?
         && !matches!(state.status(), RunStatus::Completed | RunStatus::Cancelled)
@@ -55,12 +58,15 @@ pub(crate) fn run<M: ModelProvider>(model: M) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub(crate) fn show_status(id: Option<&str>) -> Result<(), Box<dyn Error>> {
+pub(crate) fn show_status(
+    id: Option<&str>,
+    environment: &config::Environment,
+) -> Result<(), Box<dyn Error>> {
     use agent_core::agent::runtime::RunStore;
-    let store = SqliteRunStore::open(config::db_path())?;
+    let store = SqliteRunStore::open(config::db_path(environment))?;
     let state = match id {
         Some(id) => store.load(id)?,
-        None => store.latest(&config::session_id())?,
+        None => store.latest(&config::session_id(environment))?,
     };
     match state {
         Some(state) => view::print_status(&state),

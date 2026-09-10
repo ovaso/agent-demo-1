@@ -16,6 +16,7 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
+    let environment = config::Environment::load()?;
     let mut args = env::args_os().skip(1);
     let command = args.next();
     if command.as_deref() == Some(std::ffi::OsStr::new("--status")) {
@@ -25,13 +26,13 @@ fn run() -> Result<(), Box<dyn Error>> {
         if args.next().is_some() {
             return Err("用法：agent-app --status [运行 ID]".into());
         }
-        return cli::show_status(id.as_deref());
+        return cli::show_status(id.as_deref(), &environment);
     }
     if command.as_deref() == Some(std::ffi::OsStr::new("--trace-map")) {
         let path = args
             .next()
             .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| config::trace_path().into());
+            .unwrap_or_else(|| config::trace_path(&environment).into());
         if args.next().is_some() {
             return Err("用法：agent-app --trace-map [JSONL 文件]".into());
         }
@@ -41,5 +42,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     if command.is_some() {
         return Err("支持的参数：--status [运行 ID]、--trace-map [文件]".into());
     }
-    cli::run(config::model_provider()?)
+    let model = config::model_provider(&environment)?;
+    let runtime = config::RuntimeConfig::from_environment(&environment)?;
+    drop(environment);
+    cli::run(model, runtime)
 }

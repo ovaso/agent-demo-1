@@ -45,6 +45,7 @@ impl Directory {
             runtime,
             session_id: "session".into(),
             limits: RunLimits::new(1),
+            trace_path: self.0.join("trace.jsonl").to_string_lossy().into_owned(),
         }
     }
 }

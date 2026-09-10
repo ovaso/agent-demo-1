@@ -9,6 +9,7 @@ syntax-highlighting = ["agent-render-cmd/syntax-highlighting"]
 math = ["agent-render-cmd/math"]
 
 [dependencies]
+dotenvy = { version = "0.15.7", default-features = false }
 agent-core = { path = "../agent-core", features = ["sqlite"] }
 agent-render-cmd = { path = "../agent-render-cmd" }
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }

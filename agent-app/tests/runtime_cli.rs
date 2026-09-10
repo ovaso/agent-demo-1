@@ -1,3 +1,5 @@
+#[path = "runtime_cli/env_file.rs"]
+mod env_file;
 mod support;
 
 use agent_core::agent::{

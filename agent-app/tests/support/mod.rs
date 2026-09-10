@@ -90,13 +90,6 @@ impl Fixture {
         listener.set_nonblocking(true).unwrap();
         let url = format!("http://{}/v1", listener.local_addr().unwrap());
         let mut command = self.command();
-        for (name, value) in environment {
-            if let Some(value) = value {
-                command.env(name, value);
-            } else {
-                command.env_remove(name);
-            }
-        }
         match provider {
             Provider::OpenAi => {
                 command
@@ -111,6 +104,13 @@ impl Fixture {
                     .env("ANTHROPIC_BASE_URL", url)
                     .env("ANTHROPIC_API_KEY", "test-key")
                     .env("ANTHROPIC_MODEL", "test-model");
+            }
+        }
+        for (name, value) in environment {
+            if let Some(value) = value {
+                command.env(name, value);
+            } else {
+                command.env_remove(name);
             }
         }
         let stdout_path = self.directory.join("stdout.log");

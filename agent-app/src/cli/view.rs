@@ -1,4 +1,4 @@
-use crate::{config, trace_map};
+use crate::trace_map;
 use agent_core::agent::runtime::{LoopPhase, PauseReason, RunState, RunStatus};
 use std::{error::Error, io};
 
@@ -197,7 +197,7 @@ Enter 发送，Ctrl+J / Alt+Enter 换行；Ctrl+C 取消输入，Ctrl+D 退出�
     );
 }
 
-pub(super) fn show_trace() -> Result<(), Box<dyn Error>> {
-    trace_map::show(config::trace_path(), &mut io::stdout().lock())?;
+pub(super) fn show_trace(path: &str) -> Result<(), Box<dyn Error>> {
+    trace_map::show(path, &mut io::stdout().lock())?;
     Ok(())
 }

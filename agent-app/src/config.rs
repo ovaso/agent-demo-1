@@ -125,6 +125,8 @@ pub(crate) fn model_provider(
             }
             provider =
                 provider.with_max_tokens_field(environment.var("OPENAI_MAX_TOKENS_FIELD").ok())?;
+            provider =
+                provider.with_reasoning_effort(environment.var("OPENAI_REASONING_EFFORT").ok())?;
             Ok(ConfiguredProvider::OpenAi(provider))
         }
         "anthropic" => {
@@ -139,6 +141,8 @@ pub(crate) fn model_provider(
             if let Ok(base_url) = environment.var("ANTHROPIC_BASE_URL") {
                 provider = provider.with_base_url(base_url);
             }
+            provider =
+                provider.with_cache_ttl(environment.var("ANTHROPIC_CACHE_TTL").ok().as_deref())?;
             Ok(ConfiguredProvider::Anthropic(provider))
         }
         _ => Err(

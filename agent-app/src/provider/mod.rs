@@ -1,6 +1,7 @@
 //! 第三方模型服务适配器。
 
 mod anthropic;
+mod cache;
 mod continuation;
 mod input;
 mod openai;

@@ -27,6 +27,7 @@ pub struct OpenAiCompatibleProvider {
     base_url: String,
     stream_usage: bool,
     max_tokens_field: Option<String>,
+    reasoning_effort: Option<String>,
 }
 
 impl OpenAiCompatibleProvider {
@@ -38,6 +39,7 @@ impl OpenAiCompatibleProvider {
             base_url: DEFAULT_BASE_URL.to_owned(),
             stream_usage: true,
             max_tokens_field: None,
+            reasoning_effort: None,
         }
     }
 
@@ -68,6 +70,15 @@ impl OpenAiCompatibleProvider {
         Ok(self)
     }
 
+    pub(crate) fn with_reasoning_effort(
+        mut self,
+        effort: Option<String>,
+    ) -> Result<Self, ModelError> {
+        super::cache::validate_effort(effort.as_deref())?;
+        self.reasoning_effort = effort;
+        Ok(self)
+    }
+
     fn request_body(&self, request: &ModelRequest<'_>) -> Result<Value, ModelError> {
         super::continuation::validate(
             request,
@@ -91,6 +102,7 @@ impl OpenAiCompatibleProvider {
             });
             body[field] = json!(limit);
         }
+        super::cache::reasoning(&mut body, self.reasoning_effort.as_deref(), &self.base_url);
         Ok(body)
     }
 }

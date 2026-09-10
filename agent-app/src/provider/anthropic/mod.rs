@@ -29,6 +29,7 @@ pub struct AnthropicProvider {
     model: String,
     max_tokens: u32,
     base_url: String,
+    cache_ttl: Option<super::cache::CacheTtl>,
 }
 
 impl AnthropicProvider {
@@ -39,6 +40,7 @@ impl AnthropicProvider {
             model: model.into(),
             max_tokens: 1_024,
             base_url: DEFAULT_BASE_URL.to_owned(),
+            cache_ttl: None,
         }
     }
 
@@ -52,6 +54,11 @@ impl AnthropicProvider {
         self
     }
 
+    pub(crate) fn with_cache_ttl(mut self, value: Option<&str>) -> Result<Self, ModelError> {
+        self.cache_ttl = value.map(super::cache::CacheTtl::parse).transpose()?;
+        Ok(self)
+    }
+
     fn request_body(&self, request: &ModelRequest<'_>) -> Result<Value, ModelError> {
         super::continuation::validate(
             request,
@@ -63,13 +70,15 @@ impl AnthropicProvider {
             ),
         )?;
         let (system, messages) = messages(request.messages(), request.memories())?;
-        Ok(json!({
+        let mut body = json!({
             "model": self.model,
             "max_tokens": request.max_output_tokens().unwrap_or(self.max_tokens as u64),
             "system": system,
             "messages": messages,
             "tools": tools(request.tools()),
-        }))
+        });
+        super::cache::anthropic(&mut body, self.cache_ttl, &self.base_url);
+        Ok(body)
     }
 }
 
@@ -146,5 +155,23 @@ impl ModelProvider for AnthropicProvider {
             &self.base_url,
         ));
         Ok(parsed.with_request_bytes(request_bytes))
+    }
+}
+
+#[cfg(test)]
+mod caching_tests {
+    use super::*;
+    use agent_core::context::Message;
+    #[test]
+    fn official_anthropic_request_marks_stable_system_and_growing_history() {
+        let provider = AnthropicProvider::new("fake", "model");
+        let request = ModelRequest::new(
+            vec![Message::system("fixed"), Message::user("task")],
+            &[],
+            &[],
+        );
+        let body = provider.request_body(&request).unwrap();
+        assert_eq!(body["cache_control"]["type"], "ephemeral");
+        assert_eq!(body["system"][0]["cache_control"]["type"], "ephemeral");
     }
 }

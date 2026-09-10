@@ -104,3 +104,11 @@ RS_AGENT_ENV_FILE=.env.production cargo run -p agent-app
 `/tokens` 查看；`/tokens <新总额度>` 调整当前任务；`/tokens 0` 关闭累计限制。
 `/output-budget <数量>` 调整当前任务单次输出上限，随后 `/resume` 继续。
 这些操作不重置已用步数、续期次数或已记录用量，模型不能自行提高根额度。
+
+## 服务商策略
+
+- `OPENAI_REASONING_EFFORT`：缺省或 `default` 沿用服务商设置；可选 none、minimal、low、medium、high、xhigh、max。实际支持取决于服务商与模型。DeepSeek 官方端点会同时设置其 thinking 开关；none 关闭思考。
+- `ANTHROPIC_CACHE_TTL`：off、5m、1h。官方 Anthropic 主机默认 5m；兼容主机默认 off，可在确认支持后显式开启。
+- DeepSeek OpenAI 兼容端点使用服务端自动缓存，不添加 Anthropic cache_control。
+
+根目录 `.env.example` 提供无密钥示例。进程环境仍优先于 .env。

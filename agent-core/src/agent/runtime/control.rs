@@ -147,7 +147,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         Ok(state)
     }
 
-    /// 显式调整模型总额度；不是新增额度，也不隐含恢复。
+    /// 显式设置固定的模型总额度并关闭自动续期；保留用量和历史，不隐含恢复。
     pub fn set_max_steps(&mut self, id: &str, max_steps: u64) -> Result<RunState, RuntimeError> {
         let _lease = self.store.acquire()?;
         let mut state = self.state(id)?;
@@ -156,6 +156,8 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             return Err(RuntimeError::Invalid("新额度不能小于已消耗步数".into()));
         }
         state.limits.max_steps = max_steps;
+        // An explicit total is a fixed operator allocation; history is retained.
+        state.limits.step_extension = None;
         self.commit(&mut state)?;
         Ok(state)
     }
@@ -178,9 +180,9 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             return Err(RuntimeError::Invalid("不是当前待核实工具".into()));
         }
         let succeeded = output.succeeded();
-        self.accept_tool(&mut state, output)?;
         state.last_tool_succeeded = Some(succeeded);
         state.last_tool_operator = true;
+        self.accept_tool(&mut state, output)?;
         state.status = RunStatus::Paused(PauseReason::User);
         self.commit(&mut state)?;
         Ok(state)

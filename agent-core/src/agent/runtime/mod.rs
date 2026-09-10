@@ -31,6 +31,9 @@ mod sqlite;
 #[cfg(all(test, feature = "sqlite"))]
 mod sqlite_tests;
 mod state;
+mod step_budget;
+#[cfg(test)]
+mod step_budget_tests;
 mod store;
 #[cfg(test)]
 mod tests;
@@ -42,6 +45,7 @@ pub use options::{RunOptions, WorkIntent};
 #[cfg(feature = "sqlite")]
 pub use sqlite::SqliteRunStore;
 pub use state::{LoopPhase, PauseReason, RunState, RunStatus};
+pub use step_budget::{StepExtension, StepExtensionBlock, StepExtensionPolicy};
 pub use store::{MemoryRunStore, RunLease, RunStore};
 
 use crate::{tool::Registry, trace::NoopTraceSink};

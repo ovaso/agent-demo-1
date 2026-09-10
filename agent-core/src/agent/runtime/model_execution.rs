@@ -19,8 +19,22 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         trace: &mut RunTrace,
     ) -> Result<(), RuntimeError> {
         if state.budget.model_calls >= state.limits.max_steps {
-            state.status = RunStatus::Paused(PauseReason::Budget);
-            return self.commit(state);
+            if let Some(grant) = super::step_budget::extend(state) {
+                // Persist the grant before another model request; a restart cannot
+                // spend the same progress twice or reset the extension counter.
+                self.commit(state)?;
+                trace
+                    .record(
+                        &mut self.trace,
+                        crate::trace::TraceEvent::new("runtime.budget.extended")
+                            .with_field("logical_run_id", state.id())
+                            .with_field("grant", serde_json::json!(grant)),
+                    )
+                    .map_err(RuntimeError::storage)?;
+            } else {
+                state.status = RunStatus::Paused(PauseReason::Budget);
+                return self.commit(state);
+            }
         }
         if state
             .agent_policy()

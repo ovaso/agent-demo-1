@@ -9,9 +9,9 @@ use std::{
 };
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
-struct Database(PathBuf);
+pub(super) struct Database(PathBuf);
 impl Database {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let path = std::env::temp_dir().join(format!(
             "agent-runtime-sqlite-{}-{}",
             std::process::id(),
@@ -20,7 +20,7 @@ impl Database {
         std::fs::create_dir_all(&path).unwrap();
         Self(path)
     }
-    fn open(&self) -> SqliteRunStore {
+    pub(super) fn open(&self) -> SqliteRunStore {
         SqliteRunStore::open(self.0.join("runs.sqlite")).unwrap()
     }
 }

@@ -191,6 +191,7 @@ impl RunState {
             return Err(RuntimeError::Invalid("不兼容的检查点格式版本".into()));
         }
         self.limits.validate()?;
+        super::step_budget::validate(self)?;
         if let Some(id) = &self.graph.active {
             if self.graph.coordinator_context.is_none()
                 || !self.graph.current().is_some_and(|graph| {

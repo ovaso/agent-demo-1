@@ -211,6 +211,7 @@ pub(super) fn finish_node(
         .take()
         .ok_or_else(|| RuntimeError::Invalid("缺少协调者上下文".into()))?;
     let graph = state.graph.current_mut().expect("active graph");
+    let version = graph.plan_version;
     let node = graph.nodes.get_mut(&id).expect("active node");
     node.context = mem::replace(&mut state.context, coordinator);
     node.phase = state.phase.clone();
@@ -222,6 +223,9 @@ pub(super) fn finish_node(
     if let Some(output) = output {
         node.output = preview(&output, 8192);
         node.validation = validation;
+    }
+    if status == NodeStatus::Succeeded {
+        super::step_budget::record_node(state, &id, version);
     }
     state.phase = LoopPhase::Model;
     state.status = RunStatus::Running;

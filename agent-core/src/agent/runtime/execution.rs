@@ -33,6 +33,14 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 .map_err(RuntimeError::storage)?;
             let response = super::planning_tools::invoke(state, &call, &self.tools);
             if let Ok(output) = &response
+                && matches!(
+                    call.name(),
+                    "runtime_plan" | "runtime_delegate" | "runtime_reply"
+                )
+            {
+                super::step_budget::record_tool(state, &call, &output.text);
+            }
+            if let Ok(output) = &response
                 && let Some(request_id) = &output.wait_request
             {
                 state.phase = LoopPhase::Waiting {
@@ -75,7 +83,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         if !state.tool_allowed(call.name()) {
             self.accept_tool(
                 state,
-                ToolOutput::text("拒绝执行：工具不在当前任务允许的能力集合中"),
+                ToolOutput::text("拒绝执行：工具不在当前任务允许的能力集合中").with_success(false),
             )?;
             state.last_tool_succeeded = Some(false);
             return self.commit(state);
@@ -139,6 +147,12 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             .pending
             .pop_front()
             .ok_or_else(|| RuntimeError::Invalid("没有待执行工具".into()))?;
+        if !call.name().starts_with("runtime_")
+            && state.last_tool_succeeded == Some(true)
+            && output.succeeded()
+        {
+            super::step_budget::record_tool(state, &call, output.content());
+        }
         state
             .context
             .push_tool(call.id(), call.name(), output.content());

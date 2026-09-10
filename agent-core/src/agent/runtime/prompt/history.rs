@@ -72,14 +72,18 @@ pub(in crate::agent::runtime) fn append(
     let patch = if full {
         next.clone()
     } else {
-        difference(&old.expect("existing frame").value, &next)
+        difference(
+            &old.ok_or_else(|| RuntimeError::Invalid("增量提示词缺少历史帧".into()))?
+                .value,
+            &next,
+        )?
     };
     if patch.as_object().is_some_and(Map::is_empty) {
         return Ok(None);
     }
     let fields = patch
         .as_object()
-        .expect("runtime object")
+        .ok_or_else(|| RuntimeError::Invalid("当前运行视图不是 JSON 对象".into()))?
         .keys()
         .cloned()
         .collect();
@@ -118,9 +122,13 @@ pub(in crate::agent::runtime) fn append(
     }))
 }
 
-fn difference(old: &Value, next: &Value) -> Value {
-    let old = old.as_object().expect("saved runtime object");
-    let next = next.as_object().expect("runtime object");
+fn difference(old: &Value, next: &Value) -> Result<Value, RuntimeError> {
+    let old = old
+        .as_object()
+        .ok_or_else(|| RuntimeError::Invalid("保存的运行视图不是 JSON 对象".into()))?;
+    let next = next
+        .as_object()
+        .ok_or_else(|| RuntimeError::Invalid("当前运行视图不是 JSON 对象".into()))?;
     let mut patch = Map::new();
     for (key, value) in next {
         if old.get(key) != Some(value) {
@@ -132,5 +140,5 @@ fn difference(old: &Value, next: &Value) -> Value {
             patch.insert(key.clone(), Value::Null);
         }
     }
-    Value::Object(patch)
+    Ok(Value::Object(patch))
 }

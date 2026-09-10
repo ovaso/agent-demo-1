@@ -184,5 +184,14 @@
       "peak_additional_rust_heap_bytes": 15807798,
       "sample": 5
     }
-  ]
+  ],
+  "_provenance": {
+    "status": "historical_only",
+    "report_commit": "f6df2a0",
+    "benchmark_source_commit": "f6df2a0",
+    "infrastructure_removed_commit": "f6e832c",
+    "reproducible_from_current_checkout": false,
+    "rerun_for_current_code": false,
+    "scope_note": "Measurements apply only to recorded revisions and inputs. See README.md."
+  }
 }

@@ -31,7 +31,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                     "runtime.control",
                     json!({"call_id":call.id(),"tool_name":call.name(),"logical_run_id":state.id}),
                 )
-                .map_err(RuntimeError::storage)?;
+                .map_err(RuntimeError::from)?;
             let response = tools::invoke(state, &call, &self.tools);
             if let Ok(output) = &response
                 && let Some(request_id) = &output.wait_request
@@ -40,9 +40,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                     request_id: request_id.clone(),
                 };
                 self.commit(state)?;
-                return trace
-                    .end(&mut self.trace, None)
-                    .map_err(RuntimeError::storage);
+                return trace.end(&mut self.trace, None).map_err(RuntimeError::from);
             }
             let (text, ready, abort) = match response {
                 Ok(output) => (output.text, output.plan_ready, output.abort_batch),
@@ -67,9 +65,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 state.status = RunStatus::Paused(PauseReason::PlanReady);
             }
             self.commit(state)?;
-            return trace
-                .end(&mut self.trace, None)
-                .map_err(RuntimeError::storage);
+            return trace.end(&mut self.trace, None).map_err(RuntimeError::from);
         }
         let allowed = state.tools.iter().find(|tool| tool.name() == call.name());
         let read_only = allowed.is_some_and(|tool| tool.is_read_only());
@@ -94,7 +90,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 "tool.call",
                 json!({"call_id": call.id(), "tool_name": call.name(), "logical_run_id": state.id}),
             )
-            .map_err(RuntimeError::storage)?;
+            .map_err(RuntimeError::from)?;
         let (mut output, mut error) = match self.tools.invoke(call.name(), call.arguments()) {
             Ok(output) => (output, None),
             Err(error) => (
@@ -120,7 +116,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         self.commit(state)?;
         trace
             .end(&mut self.trace, error.as_ref())
-            .map_err(RuntimeError::storage)
+            .map_err(RuntimeError::from)
     }
 
     pub(in crate::agent::runtime) fn accept_tool(

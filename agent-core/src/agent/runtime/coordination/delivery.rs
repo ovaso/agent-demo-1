@@ -16,7 +16,7 @@ fn matches_actor(state: &RunState, actor: &str, attempt: u32, version: u64) -> b
         && super::messages::binding(state, actor).ok() == Some(attempt)
 }
 
-pub(in crate::agent::runtime) fn tick(state: &mut RunState, now: u64) {
+pub(in crate::agent::runtime) fn tick(state: &mut RunState, now: u64) -> Result<(), RuntimeError> {
     let changes: Vec<_> = state
         .collaboration
         .messages
@@ -64,12 +64,12 @@ pub(in crate::agent::runtime) fn tick(state: &mut RunState, now: u64) {
         })
         .collect();
     for (id, status) in changes {
-        state.collaboration.sequence += 1;
         let message = state
             .collaboration
             .messages
             .get_mut(&id)
-            .expect("message exists");
+            .ok_or_else(|| RuntimeError::Invalid(format!("更新协作消息 {id} 时记录不存在")))?;
+        state.collaboration.sequence += 1;
         message.status = status;
         message.sequence = state.collaboration.sequence;
     }
@@ -86,6 +86,7 @@ pub(in crate::agent::runtime) fn tick(state: &mut RunState, now: u64) {
             }
         }
     }
+    Ok(())
 }
 
 pub(in crate::agent::runtime) fn view(message: &CollaborationMessage, actor: &str) -> Value {
@@ -197,7 +198,7 @@ pub(in crate::agent::runtime) fn wait_result(
         .collaboration
         .messages
         .get_mut(id)
-        .expect("message exists")
+        .ok_or_else(|| RuntimeError::Invalid(format!("接纳答复 {id} 时记录不存在")))?
         .response_seen = true;
     Ok(Some(WaitResult {
         text: result,

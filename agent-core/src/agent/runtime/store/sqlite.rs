@@ -20,12 +20,12 @@ impl SqliteRunStore {
                 "内存运行请使用 MemoryRunStore".into(),
             ));
         }
-        let connection = Connection::open(path.as_ref()).map_err(RuntimeError::storage)?;
+        let connection = Connection::open(path.as_ref()).map_err(RuntimeError::from)?;
         connection
             .busy_timeout(Duration::from_secs(5))
-            .map_err(RuntimeError::storage)?;
+            .map_err(RuntimeError::from)?;
         let mut lock_path = std::fs::canonicalize(path.as_ref())
-            .map_err(RuntimeError::storage)?
+            .map_err(RuntimeError::from)?
             .into_os_string();
         lock_path.push(".runtime.lock");
         let store = Self {
@@ -54,7 +54,7 @@ impl SqliteRunStore {
                  context_json TEXT NOT NULL
              );",
             )
-            .map_err(RuntimeError::storage)?;
+            .map_err(RuntimeError::from)?;
         Ok(store)
     }
 
@@ -68,8 +68,8 @@ impl SqliteRunStore {
                 |row| row.get(0),
             )
             .optional()
-            .map_err(RuntimeError::storage)?;
-        json.map(|json| serde_json::from_str(&json).map_err(RuntimeError::storage))
+            .map_err(RuntimeError::from)?;
+        json.map(|json| serde_json::from_str(&json).map_err(RuntimeError::from))
             .transpose()
     }
 
@@ -82,7 +82,7 @@ impl SqliteRunStore {
                 |row| row.get(0),
             )
             .optional()
-            .map_err(RuntimeError::storage)?;
+            .map_err(RuntimeError::from)?;
         match id {
             Some(id) => self.load(&id),
             None => Ok(None),
@@ -107,10 +107,10 @@ impl SqliteRunStore {
              ON CONFLICT(session_id) DO UPDATE SET context_json=excluded.context_json",
                 params![
                     session_id,
-                    serde_json::to_string(&context).map_err(RuntimeError::storage)?
+                    serde_json::to_string(&context).map_err(RuntimeError::from)?
                 ],
             )
-            .map_err(RuntimeError::storage)?;
+            .map_err(RuntimeError::from)?;
         Ok(())
     }
 }
@@ -125,10 +125,10 @@ impl RunStore for SqliteRunStore {
             .create(true)
             .truncate(false)
             .open(&self.lock_path)
-            .map_err(RuntimeError::storage)?;
+            .map_err(RuntimeError::from)?;
         file.try_lock().map_err(|error| match error {
             TryLockError::WouldBlock => RuntimeError::Busy,
-            TryLockError::Error(error) => RuntimeError::storage(error),
+            TryLockError::Error(error) => RuntimeError::from(error),
         })?;
         Ok(RunLease {
             memory: None,
@@ -145,10 +145,10 @@ impl RunStore for SqliteRunStore {
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()
-            .map_err(RuntimeError::storage)?;
+            .map_err(RuntimeError::from)?;
         checkpoint
             .map(|(revision, json)| {
-                let state: RunState = serde_json::from_str(&json).map_err(RuntimeError::storage)?;
+                let state: RunState = serde_json::from_str(&json).map_err(RuntimeError::from)?;
                 if state.id != run_id || i64::try_from(state.revision).ok() != Some(revision) {
                     return Err(RuntimeError::Invalid("检查点标识或版本与索引不一致".into()));
                 }
@@ -160,14 +160,11 @@ impl RunStore for SqliteRunStore {
 
     fn create(&mut self, state: &RunState) -> Result<(), RuntimeError> {
         let json = encode(state)?;
-        let tx = self
-            .connection
-            .transaction()
-            .map_err(RuntimeError::storage)?;
+        let tx = self.connection.transaction().map_err(RuntimeError::from)?;
         tx.execute("INSERT INTO agent_runs(run_id,session_id,revision,status,checkpoint) VALUES (?1,?2,?3,?4,?5)",
             params![state.id, state.session_id, revision(state.revision)?, status(state), json]).map_err(storage_error)?;
         save_context(&tx, state)?;
-        tx.commit().map_err(RuntimeError::storage)
+        tx.commit().map_err(RuntimeError::from)
     }
 
     fn save(&mut self, state: &RunState, expected_revision: u64) -> Result<(), RuntimeError> {
@@ -175,17 +172,14 @@ impl RunStore for SqliteRunStore {
             return Err(RuntimeError::Conflict);
         }
         let json = encode(state)?;
-        let tx = self
-            .connection
-            .transaction()
-            .map_err(RuntimeError::storage)?;
+        let tx = self.connection.transaction().map_err(RuntimeError::from)?;
         let changed = tx.execute("UPDATE agent_runs SET revision=?1,status=?2,checkpoint=?3 WHERE run_id=?4 AND revision=?5 AND session_id=?6",
             params![revision(state.revision)?, status(state), json, state.id, revision(expected_revision)?, state.session_id]).map_err(storage_error)?;
         if changed != 1 {
             return Err(RuntimeError::Conflict);
         }
         save_context(&tx, state)?;
-        tx.commit().map_err(RuntimeError::storage)
+        tx.commit().map_err(RuntimeError::from)
     }
 }
 
@@ -218,7 +212,7 @@ fn save_context(tx: &Transaction<'_>, state: &RunState) -> Result<(), RuntimeErr
             "DELETE FROM agent_contexts WHERE session_id=?1",
             [&state.session_id],
         )
-        .map_err(RuntimeError::storage)?;
+        .map_err(RuntimeError::from)?;
     } else {
         tx.execute(
             "INSERT INTO agent_contexts(session_id,context_json) VALUES (?1,?2)
@@ -226,10 +220,10 @@ fn save_context(tx: &Transaction<'_>, state: &RunState) -> Result<(), RuntimeErr
             WHERE agent_contexts.context_json != excluded.context_json",
             params![
                 state.session_id,
-                serde_json::to_string(state.context()).map_err(RuntimeError::storage)?
+                serde_json::to_string(state.context()).map_err(RuntimeError::from)?
             ],
         )
-        .map_err(RuntimeError::storage)?;
+        .map_err(RuntimeError::from)?;
     }
     Ok(())
 }
@@ -238,6 +232,6 @@ fn storage_error(error: rusqlite::Error) -> RuntimeError {
     if error.sqlite_error_code() == Some(rusqlite::ErrorCode::ConstraintViolation) {
         RuntimeError::Conflict
     } else {
-        RuntimeError::storage(error)
+        RuntimeError::from(error)
     }
 }

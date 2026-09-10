@@ -195,14 +195,14 @@ pub(in crate::agent::runtime) fn reply(
     {
         return Err(RuntimeError::Invalid("请求已结束或超时".into()));
     }
-    state.collaboration.sequence += 1;
-    state.work_revision += 1;
-    let sequence = state.collaboration.sequence;
     let message = state
         .collaboration
         .messages
         .get_mut(id)
-        .expect("request exists");
+        .ok_or_else(|| RuntimeError::Invalid(format!("答复请求 {id} 时记录不存在")))?;
+    state.collaboration.sequence += 1;
+    state.work_revision += 1;
+    let sequence = state.collaboration.sequence;
     message.status = MessageStatus::Answered {
         by: actor,
         body: body.into(),

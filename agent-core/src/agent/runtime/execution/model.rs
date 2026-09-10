@@ -31,7 +31,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                             .with_field("logical_run_id", state.id())
                             .with_field("grant", serde_json::json!(grant)),
                     )
-                    .map_err(RuntimeError::storage)?;
+                    .map_err(RuntimeError::from)?;
             } else {
                 state.status = RunStatus::Paused(PauseReason::Budget);
                 return self.commit(state);
@@ -70,7 +70,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                         .with_field("actor", state.actor())
                         .with_field("details", serde_json::json!(compacted)),
                 )
-                .map_err(RuntimeError::storage)?;
+                .map_err(RuntimeError::from)?;
         }
         if let Some(change) = change {
             trace
@@ -79,11 +79,11 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                     crate::trace::TraceEvent::new("runtime.prompt.updated")
                         .with_field("details", serde_json::json!(change)),
                 )
-                .map_err(RuntimeError::storage)?;
+                .map_err(RuntimeError::from)?;
         }
         let request = ModelRequest::new(messages, &[], &tools)
             .with_max_input_bytes(state.limits.max_context_bytes);
-        let diagnostics = request.diagnostics().map_err(RuntimeError::storage)?;
+        let diagnostics = request.diagnostics().map_err(RuntimeError::from)?;
         let Some(allocation) = state.budget.token_usage.allocate(
             diagnostics.logical_bytes,
             state.limits.max_output_tokens,

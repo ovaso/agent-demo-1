@@ -85,7 +85,7 @@ pub(in crate::agent::runtime) fn invoke(
         }
         "runtime_agents" => {
             let nodes: Vec<_> = state.graph.current().into_iter().flat_map(|run| &run.nodes).map(|(id,node)| serde_json::json!({"node":id,"address":format!("node/{id}"),"status":node.status,"budget":node.policy,"summary":node.task.description})).collect();
-            let text = serde_json::to_string(&nodes).map_err(RuntimeError::storage)?;
+            let text = serde_json::to_string(&nodes).map_err(RuntimeError::from)?;
             if text.len() > state.limits.max_tool_output_bytes {
                 return Err(RuntimeError::Invalid("节点列表超过结果上限".into()));
             }
@@ -102,11 +102,16 @@ pub(in crate::agent::runtime) fn invoke(
         }
         "runtime_cancel_agent" => {
             coordination::delegation::cancel(state, required(call, "node")?, false)?;
-            coordination::delivery::tick(state, coordination::messages::now_ms());
+            coordination::delivery::tick(state, coordination::messages::now_ms())?;
             "任务已取消，历史与用量保留。".into()
         }
         "runtime_result" => result(state, call)?,
-        _ => unreachable!(),
+        _ => {
+            return Err(RuntimeError::Invalid(format!(
+                "未知运行时工具：{}",
+                call.name()
+            )));
+        }
     };
     Ok(ControlOutput {
         abort_batch: false,

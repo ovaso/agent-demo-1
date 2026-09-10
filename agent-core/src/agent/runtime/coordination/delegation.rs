@@ -35,7 +35,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         let mut state = self.state(id)?;
         Self::check_editable(&state)?;
         cancel(&mut state, agent, true)?;
-        super::delivery::tick(&mut state, super::messages::now_ms());
+        super::delivery::tick(&mut state, super::messages::now_ms())?;
         self.commit(&mut state)?;
         Ok(state)
     }
@@ -114,7 +114,10 @@ pub(in crate::agent::runtime) fn create(
             nodes: BTreeMap::new(),
         });
     }
-    let graph = state.graph.current_mut().expect("graph exists");
+    let graph = state
+        .graph
+        .current_mut()
+        .ok_or_else(|| RuntimeError::Invalid("委托创建后缺少图".into()))?;
     if graph.nodes.len() >= 64 {
         return Err(RuntimeError::Invalid("工作节点总数达到上限".into()));
     }

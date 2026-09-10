@@ -102,7 +102,11 @@ pub(in crate::agent::runtime) fn apply_route(state: &mut RunState) -> Result<(),
         state
             .graph
             .bind(state.plans.revision(), plan, state.work_revision)?;
-        state.graph.current_mut().expect("bound graph").engaged = true;
+        state
+            .graph
+            .current_mut()
+            .ok_or_else(|| RuntimeError::Invalid("路由绑定后缺少图".into()))?
+            .engaged = true;
     } else if state.graph.active.is_some() {
         let status = if state.agent_policy().is_some() {
             NodeStatus::NeedsCoordinator
@@ -175,7 +179,11 @@ pub(in crate::agent::runtime) fn request_node(
     let planned = node.origin == crate::agent::delegation::NodeOrigin::Planned;
     state.requested_node = Some(id.into());
     if planned {
-        state.graph.current_mut().expect("graph").engaged = true;
+        state
+            .graph
+            .current_mut()
+            .ok_or_else(|| RuntimeError::Invalid("排队节点所属图不存在".into()))?
+            .engaged = true;
     }
     Ok(())
 }

@@ -174,7 +174,12 @@ pub(in crate::agent::runtime) fn invoke(
             coordination::graph::request_retry(state, required(call, "node")?, false)?;
             "重试已排入调度。".into()
         }
-        _ => unreachable!(),
+        _ => {
+            return Err(RuntimeError::Invalid(format!(
+                "未知运行时工具：{}",
+                call.name()
+            )));
+        }
     };
     Ok(ControlOutput {
         abort_batch: false,
@@ -208,10 +213,7 @@ fn read_board(state: &RunState, call: &ToolCall) -> Result<String, RuntimeError>
     let mut entries = Vec::new();
     let mut next_cursor = after;
     for entry in candidates {
-        let size = serde_json::to_vec(entry)
-            .map_err(RuntimeError::storage)?
-            .len()
-            + 1;
+        let size = serde_json::to_vec(entry).map_err(RuntimeError::from)?.len() + 1;
         if bytes + size > state.limits.max_tool_output_bytes {
             break;
         }

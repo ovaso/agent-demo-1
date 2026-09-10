@@ -88,12 +88,24 @@ impl ToolDefinition {
         (self.created_at, &self.name)
     }
 
-    /// Metadata changes do not change the executable contract of a saved task.
+    /// 展示说明、版本和参数顺序不改变执行契约。所有参数目前都是字符串；
+    /// 新增参数类型或值域约束时，也必须纳入此比较。
     pub fn same_contract(&self, other: &Self) -> bool {
         self.name == other.name
-            && self.description == other.description
-            && self.parameters == other.parameters
             && self.read_only == other.read_only
+            && self.parameters.len() == other.parameters.len()
+            && self
+                .parameters
+                .iter()
+                .enumerate()
+                .all(|(index, parameter)| {
+                    !self.parameters[..index]
+                        .iter()
+                        .any(|previous| previous.name == parameter.name)
+                        && other.parameters.iter().any(|current| {
+                            parameter.name == current.name && parameter.required == current.required
+                        })
+                })
     }
 
     pub(crate) fn refresh_metadata(&mut self, current: &Self) {

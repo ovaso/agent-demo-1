@@ -21,7 +21,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         state: &mut RunState,
         trace: &mut RunTrace,
     ) -> Result<bool, RuntimeError> {
-        coordination::delivery::tick(state, coordination::messages::now_ms());
+        coordination::delivery::tick(state, coordination::messages::now_ms())?;
         coordination::graph::apply_route(state)?;
         if let Some(id) = state.graph.active.clone() {
             if let LoopPhase::Waiting { request_id } = state.phase.clone() {
@@ -204,16 +204,35 @@ pub(in crate::agent::runtime) fn finish_node(
     let id = state
         .graph
         .active
-        .take()
+        .as_ref()
         .ok_or_else(|| RuntimeError::Invalid("没有活动节点".into()))?;
+    let graph = state
+        .graph
+        .current()
+        .ok_or_else(|| RuntimeError::Invalid("结算活动节点时缺少图".into()))?;
+    if !graph.nodes.contains_key(id) {
+        return Err(RuntimeError::Invalid(format!("活动节点 {id} 不在当前图中")));
+    }
+    // Check every fallible reference before taking the coordinator context.
     let coordinator = state
         .graph
         .coordinator_context
         .take()
         .ok_or_else(|| RuntimeError::Invalid("缺少协调者上下文".into()))?;
-    let graph = state.graph.current_mut().expect("active graph");
+    let id = state
+        .graph
+        .active
+        .take()
+        .ok_or_else(|| RuntimeError::Invalid("结算时活动节点丢失".into()))?;
+    let graph = state
+        .graph
+        .current_mut()
+        .ok_or_else(|| RuntimeError::Invalid("结算时活动图丢失".into()))?;
     let version = graph.plan_version;
-    let node = graph.nodes.get_mut(&id).expect("active node");
+    let node = graph
+        .nodes
+        .get_mut(&id)
+        .ok_or_else(|| RuntimeError::Invalid(format!("结算时活动节点 {id} 丢失")))?;
     node.context = mem::replace(&mut state.context, coordinator);
     node.phase = state.phase.clone();
     node.last_tool_succeeded = state.last_tool_succeeded.take();

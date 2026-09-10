@@ -156,16 +156,8 @@ pub(in crate::agent::runtime) fn extend(state: &mut RunState) -> Option<StepExte
     if state.budget.model_calls < state.limits.max_steps || state.step_extension_block().is_some() {
         return None;
     }
-    let policy = state
-        .limits
-        .step_extension
-        .as_ref()
-        .expect("eligible policy");
-    let progress = state
-        .budget
-        .step_progress
-        .as_mut()
-        .expect("eligible progress");
+    let policy = state.limits.step_extension.as_ref()?;
+    let progress = state.budget.step_progress.as_mut()?;
     let grant = StepExtension {
         at_model_call: state.budget.model_calls,
         previous_limit: state.limits.max_steps,

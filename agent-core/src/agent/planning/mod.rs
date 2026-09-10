@@ -73,9 +73,7 @@ impl Plan {
                 "计划必须包含目标、验收要求和 1..=64 个任务".into(),
             ));
         }
-        let size = serde_json::to_vec(self)
-            .map_err(RuntimeError::storage)?
-            .len();
+        let size = serde_json::to_vec(self).map_err(RuntimeError::from)?.len();
         if size > 128 * 1024 {
             return Err(RuntimeError::Invalid("计划超过 128 KiB".into()));
         }
@@ -132,7 +130,9 @@ impl Plan {
             visited += 1;
             for task in &self.tasks {
                 if task.depends_on.iter().any(|dep| dep == id) {
-                    let degree = remaining.get_mut(task.id.as_str()).expect("validated task");
+                    let degree = remaining.get_mut(task.id.as_str()).ok_or_else(|| {
+                        RuntimeError::Invalid(format!("计划依赖计数缺少任务 {}", task.id))
+                    })?;
                     *degree -= 1;
                     if *degree == 0 {
                         ready.push_back(task.id.as_str());

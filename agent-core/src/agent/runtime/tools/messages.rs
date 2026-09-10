@@ -72,7 +72,7 @@ pub(in crate::agent::runtime) fn invoke(
         return Err(RuntimeError::Invalid("协作工具包含未知参数".into()));
     }
     let now = coordination::messages::now_ms();
-    coordination::delivery::tick(state, now);
+    coordination::delivery::tick(state, now)?;
     let mut wait_request = None;
     let mut abort_batch = false;
     let text = match call.name() {
@@ -128,7 +128,10 @@ pub(in crate::agent::runtime) fn invoke(
                     result.text
                 }
                 None => {
-                    let request = state.collaboration.get(id).expect("validated request");
+                    let request = state
+                        .collaboration
+                        .get(id)
+                        .ok_or_else(|| RuntimeError::Invalid(format!("等待请求 {id} 不存在")))?;
                     coordination::messages::check_wait(state, &state.actor(), &request.to)?;
                     wait_request = Some(id.into());
                     String::new()
@@ -150,7 +153,12 @@ pub(in crate::agent::runtime) fn invoke(
             coordination::delivery::mark_seen(state, &views);
             serde_json::json!({"messages":views,"next_cursor":cursor,"latest_sequence":state.collaboration.sequence()}).to_string()
         }
-        _ => unreachable!(),
+        _ => {
+            return Err(RuntimeError::Invalid(format!(
+                "未知运行时工具：{}",
+                call.name()
+            )));
+        }
     };
     Ok(ControlOutput {
         abort_batch,

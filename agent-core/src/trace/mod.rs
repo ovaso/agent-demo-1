@@ -116,4 +116,11 @@ impl Display for TraceError {
     }
 }
 
-impl Error for TraceError {}
+impl Error for TraceError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Io(error) => Some(error),
+            Self::Serialization(error) => Some(error),
+        }
+    }
+}

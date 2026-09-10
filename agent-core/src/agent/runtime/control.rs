@@ -75,7 +75,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 input,
                 limits.memory_limits.within(limits.max_context_bytes / 2),
             )
-            .map_err(RuntimeError::storage)?;
+            .map_err(RuntimeError::from)?;
         let state = RunState {
             prompt_history: Default::default(),
             collaboration: Default::default(),

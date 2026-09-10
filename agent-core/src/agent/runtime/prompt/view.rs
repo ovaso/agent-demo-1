@@ -159,7 +159,7 @@ pub(in crate::agent::runtime) fn value(
                 extension_block: state.step_extension_block(),
             }),
     };
-    serde_json::to_value(overview).map_err(RuntimeError::storage)
+    serde_json::to_value(overview).map_err(RuntimeError::from)
 }
 
 fn preview(text: &str) -> &str {

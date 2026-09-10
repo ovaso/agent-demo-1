@@ -23,7 +23,8 @@ pub(super) fn encode_prefixed(
     let mut buffer = Vec::with_capacity(limit.min(128).max(prefix.len()));
     buffer.extend_from_slice(prefix.as_bytes());
     write_json(value, Some(&mut buffer), remaining)?;
-    String::from_utf8(buffer).map_err(RuntimeError::storage)
+    String::from_utf8(buffer)
+        .map_err(|error| RuntimeError::Invalid(format!("JSON 编码产生无效 UTF-8：{error}")))
 }
 
 fn write_json(
@@ -35,8 +36,7 @@ fn write_json(
         buffer,
         remaining: limit,
     };
-    serde_json::to_writer(&mut writer, value)
-        .map_err(|error| RuntimeError::Invalid(error.to_string()))
+    serde_json::to_writer(&mut writer, value).map_err(RuntimeError::from)
 }
 
 struct BoundedWriter<'a> {

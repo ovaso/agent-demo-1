@@ -79,7 +79,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 "agent.run",
                 json!({"logical_run_id": state.id, "checkpoint_revision": state.revision}),
             )
-            .map_err(RuntimeError::storage)?;
+            .map_err(RuntimeError::from)?;
         let result = (|| {
             loop {
                 self.step(&mut state, on_text, &mut trace)?;
@@ -93,7 +93,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         });
         let recorded = trace
             .finish(&mut self.trace, trace_error.as_ref())
-            .map_err(RuntimeError::storage);
+            .map_err(RuntimeError::from);
         result?;
         recorded?;
         Ok(state)
@@ -124,7 +124,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                         Memory::new(format!("session-summary:{}", state.id), &summary)
                             .with_tag("session-summary"),
                     )
-                    .map_err(RuntimeError::storage)?;
+                    .map_err(RuntimeError::from)?;
                 state.result = Some(crate::agent::AgentResult {
                     text: summary,
                     steps: state.budget.model_calls as usize,

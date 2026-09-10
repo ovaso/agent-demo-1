@@ -523,5 +523,14 @@
       "sample": 5,
       "version": "after"
     }
-  ]
+  ],
+  "_provenance": {
+    "status": "historical_only",
+    "report_commit": "3599363",
+    "benchmark_source_commit": "f6df2a0",
+    "infrastructure_removed_commit": "f6e832c",
+    "reproducible_from_current_checkout": false,
+    "rerun_for_current_code": false,
+    "scope_note": "Measurements apply only to recorded revisions and inputs. See README.md."
+  }
 }

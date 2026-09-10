@@ -1,4 +1,4 @@
-# 结构与资源开销重构
+# 历史结构与资源开销重构
 
 > 历史记录：本文对应删除测试之前的版本，所述测试/基准源码及部分模块路径已变更，不能作为当前验证入口。最新结构与验证见 [结构审查与重构](structure-audit-2026-09-10.md)。
 
@@ -8,7 +8,7 @@
 
 生产代码基线为 `f57f08d`。使用 `rustc 1.96.1`、`aarch64-apple-darwin`、现有 release 配置和默认 features。应用产物为 6,173,808 字节；不更改功能、SQLite bundled 链接方式或发布参数来缩小体积。
 
-固定本地基准位于 `agent-core/examples/runtime_bench/`，只使用标准库和现有依赖，不调用网络模型。编译与运行：
+删除前的固定本地基准曾位于 `agent-core/examples/runtime_bench/`，只使用标准库和现有依赖，不调用网络模型。历史编译与运行命令（当前缺少程序，不可直接执行）：
 
 ```sh
 cargo build --release -p agent-core --example runtime_bench --locked
@@ -106,3 +106,5 @@ memory-search 初测中位耗时为 18,596 → 17,234 µs，分配次数 3,620 �
 | `a6effad` | 借用的规划状态投影 |
 | `cd4cec9` | Markdown 逐条筛选与正文缓冲复用 |
 | `3599363` | 应用配置/CLI 展示拆分、统一 Provider 分派及最终验证记录 |
+
+产物来源提交与当前复现限制见 [基准档案说明](benchmarks/README.md)。

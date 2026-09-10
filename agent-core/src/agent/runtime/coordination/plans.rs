@@ -15,7 +15,10 @@ pub(in crate::agent::runtime) fn save(
     if state.graph.current().is_some() {
         state.graph.bind(
             revision,
-            state.plans.current().expect("saved plan"),
+            state
+                .plans
+                .current()
+                .ok_or_else(|| RuntimeError::Invalid("保存后缺少当前计划".into()))?,
             state.work_revision,
         )?;
     }

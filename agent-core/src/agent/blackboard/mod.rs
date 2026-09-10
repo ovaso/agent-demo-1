@@ -106,7 +106,7 @@ impl Blackboard {
             return Err(RuntimeError::Invalid("共享记录修订总数达到上限".into()));
         }
         if serde_json::to_vec(&update)
-            .map_err(RuntimeError::storage)?
+            .map_err(RuntimeError::from)?
             .len()
             > MAX_ENTRY_BYTES
         {
@@ -130,6 +130,8 @@ impl Blackboard {
             content: update.content,
             sources: update.sources,
         });
-        Ok(entries.last().expect("inserted entry"))
+        entries
+            .last()
+            .ok_or_else(|| RuntimeError::Invalid("工作板写入后缺少记录".into()))
     }
 }

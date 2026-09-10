@@ -85,8 +85,12 @@ impl GraphState {
                     break;
                 }
                 for id in reusable {
-                    let old = &previous.nodes[&id];
-                    let node = nodes.get_mut(&id).expect("reused node");
+                    let old = previous.nodes.get(&id).ok_or_else(|| {
+                        RuntimeError::Invalid(format!("复用节点 {id} 缺少历史记录"))
+                    })?;
+                    let node = nodes.get_mut(&id).ok_or_else(|| {
+                        RuntimeError::Invalid(format!("复用节点 {id} 不在新图中"))
+                    })?;
                     node.status = old.status;
                     node.attempts = old.attempts;
                     node.output.clone_from(&old.output);

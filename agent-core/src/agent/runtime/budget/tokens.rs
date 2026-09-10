@@ -1,5 +1,5 @@
 //! Durable reservations prevent failures and process restarts from resetting usage.
-use super::{RunState, RunStore, Runtime, RuntimeError};
+use super::super::{RunState, RunStore, Runtime, RuntimeError};
 use crate::model::ModelUsage;
 use serde::{Deserialize, Serialize};
 
@@ -21,7 +21,7 @@ struct Reservation {
     input: u64,
     output: Option<u64>,
 }
-pub(super) struct Allocation {
+pub(in crate::agent::runtime) struct Allocation {
     pub output_limit: Option<u64>,
 }
 
@@ -45,7 +45,11 @@ impl TokenUsage {
         self.accounted_calls
             .saturating_add(u64::from(self.pending.is_some()))
     }
-    pub(super) fn validate(&self, calls: u64, in_flight: bool) -> Result<(), RuntimeError> {
+    pub(in crate::agent::runtime) fn validate(
+        &self,
+        calls: u64,
+        in_flight: bool,
+    ) -> Result<(), RuntimeError> {
         if self.accounted_requests() > calls
             || (self.pending.is_some() && (!in_flight || self.accounted_requests() != calls))
         {
@@ -66,7 +70,7 @@ impl TokenUsage {
             .saturating_add(self.estimated)
             .saturating_add(self.reserved_tokens())
     }
-    pub(super) fn synchronize(&mut self, model_calls: u64) {
+    pub(in crate::agent::runtime) fn synchronize(&mut self, model_calls: u64) {
         if self.pending.is_none() && self.accounted_calls < model_calls {
             self.unmetered_requests = self
                 .unmetered_requests
@@ -74,7 +78,7 @@ impl TokenUsage {
             self.accounted_calls = model_calls;
         }
     }
-    pub(super) fn allocate(
+    pub(in crate::agent::runtime) fn allocate(
         &mut self,
         bytes: usize,
         requested: Option<u64>,
@@ -104,7 +108,7 @@ impl TokenUsage {
             output_limit: output,
         })
     }
-    pub(super) fn settle(&mut self, usage: ModelUsage) {
+    pub(in crate::agent::runtime) fn settle(&mut self, usage: ModelUsage) {
         let Some(pending) = self.pending.take() else {
             return;
         };

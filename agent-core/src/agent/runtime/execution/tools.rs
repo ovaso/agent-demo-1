@@ -1,5 +1,6 @@
-use super::super::AgentError;
-use super::{LoopPhase, PauseReason, RunState, RunStatus, RunStore, Runtime, RuntimeError};
+use super::super::{LoopPhase, PauseReason, RunState, RunStatus, RunStore, Runtime, RuntimeError};
+use crate::agent::AgentError;
+use crate::agent::runtime::{budget, tools};
 use crate::{
     memory::MemoryStore,
     model::ModelProvider,
@@ -9,7 +10,7 @@ use crate::{
 use serde_json::json;
 
 impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, S, T> {
-    pub(super) fn call_tool(
+    pub(in crate::agent::runtime) fn call_tool(
         &mut self,
         state: &mut RunState,
         trace: &mut RunTrace,
@@ -31,7 +32,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                     json!({"call_id":call.id(),"tool_name":call.name(),"logical_run_id":state.id}),
                 )
                 .map_err(RuntimeError::storage)?;
-            let response = super::planning_tools::invoke(state, &call, &self.tools);
+            let response = tools::invoke(state, &call, &self.tools);
             if let Ok(output) = &response
                 && let Some(request_id) = &output.wait_request
             {
@@ -122,7 +123,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             .map_err(RuntimeError::storage)
     }
 
-    pub(super) fn accept_tool(
+    pub(in crate::agent::runtime) fn accept_tool(
         &mut self,
         state: &mut RunState,
         output: ToolOutput,
@@ -143,7 +144,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             && state.last_tool_succeeded == Some(true)
             && output.succeeded()
         {
-            super::step_budget::record_tool(state, &call, output.content());
+            budget::steps::record_tool(state, &call, output.content());
         }
         state
             .context
@@ -169,7 +170,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         Ok(())
     }
 
-    pub(super) fn skip_batch(state: &mut RunState, reason: &str) {
+    pub(in crate::agent::runtime) fn skip_batch(state: &mut RunState, reason: &str) {
         for call in state.pending.drain(..) {
             state.context.push_tool(call.id(), call.name(), reason);
         }

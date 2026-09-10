@@ -1,5 +1,10 @@
+use super::AnthropicProvider;
 use super::helpers::arguments_value;
-use agent_core::{context::Message, model::ModelError, tool::ToolDefinition};
+use agent_core::{
+    context::Message,
+    model::{ModelError, ModelRequest},
+    tool::ToolDefinition,
+};
 use serde_json::{Map, Value, json};
 pub(super) fn messages(
     messages: &[Message],
@@ -94,4 +99,28 @@ pub(super) fn tools(definitions: &[ToolDefinition]) -> Vec<Value> {
             })
         })
         .collect()
+}
+
+impl AnthropicProvider {
+    pub(super) fn request_body(&self, request: &ModelRequest<'_>) -> Result<Value, ModelError> {
+        super::super::continuation::validate(
+            request,
+            super::super::continuation::ANTHROPIC,
+            &super::super::continuation::binding(
+                super::super::continuation::ANTHROPIC,
+                &self.model,
+                &self.base_url,
+            ),
+        )?;
+        let (system, messages) = messages(request.messages(), request.memories())?;
+        let mut body = json!({
+            "model": self.model,
+            "max_tokens": request.max_output_tokens().unwrap_or(self.max_tokens as u64),
+            "system": system,
+            "messages": messages,
+            "tools": tools(request.tools()),
+        });
+        super::super::cache::anthropic(&mut body, self.cache_ttl, &self.base_url);
+        Ok(body)
+    }
 }

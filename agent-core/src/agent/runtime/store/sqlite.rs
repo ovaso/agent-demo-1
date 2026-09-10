@@ -1,4 +1,4 @@
-use super::{RunLease, RunState, RunStatus, RunStore, RuntimeError};
+use super::super::{RunLease, RunState, RunStatus, RunStore, RuntimeError};
 use crate::context::Context;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use std::{
@@ -152,7 +152,7 @@ impl RunStore for SqliteRunStore {
                 if state.id != run_id || i64::try_from(state.revision).ok() != Some(revision) {
                     return Err(RuntimeError::Invalid("检查点标识或版本与索引不一致".into()));
                 }
-                super::store::check_size(&state)?;
+                super::check_size(&state)?;
                 Ok(state)
             })
             .transpose()
@@ -193,7 +193,7 @@ fn encode(state: &RunState) -> Result<String, RuntimeError> {
     // Check each encoded chunk before appending it; no unbounded response buffer
     // or second serialization pass is needed, and transactions start only after success.
     state.validate()?;
-    super::serialization::encode(state, state.limits.max_checkpoint_bytes)
+    super::super::serialization::encode(state, state.limits.max_checkpoint_bytes)
 }
 
 fn revision(value: u64) -> Result<i64, RuntimeError> {

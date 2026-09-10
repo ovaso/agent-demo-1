@@ -1,5 +1,5 @@
 //! Progress-gated grants within an operator-authorized ceiling.
-use super::{RunState, RunStore, Runtime, RuntimeError};
+use super::super::{RunState, RunStore, Runtime, RuntimeError};
 use crate::{memory::MemoryStore, model::ModelProvider, tool::ToolCall, trace::TraceSink};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -70,8 +70,8 @@ impl StepExtensionBlock {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct StepProgress {
-    pub(super) extensions: Vec<StepExtension>,
+pub(in crate::agent::runtime) struct StepProgress {
+    pub(in crate::agent::runtime) extensions: Vec<StepExtension>,
     sequence: u64,
     consumed_sequence: u64,
     last_model_call: u64,
@@ -122,7 +122,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         if state.budget.step_progress.is_none() {
             // Older checkpoints contain no progress ledger. An operator may
             // adopt their last confirmed successful receipt once, at a safe boundary.
-            let receipt = if state.phase == super::LoopPhase::Model
+            let receipt = if state.phase == super::super::LoopPhase::Model
                 && state.last_tool_succeeded == Some(true)
             {
                 state.context.last().and_then(|last| {
@@ -152,7 +152,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
     }
 }
 
-pub(super) fn extend(state: &mut RunState) -> Option<StepExtension> {
+pub(in crate::agent::runtime) fn extend(state: &mut RunState) -> Option<StepExtension> {
     if state.budget.model_calls < state.limits.max_steps || state.step_extension_block().is_some() {
         return None;
     }
@@ -182,7 +182,7 @@ pub(super) fn extend(state: &mut RunState) -> Option<StepExtension> {
     Some(grant)
 }
 
-pub(super) fn record_tool(state: &mut RunState, call: &ToolCall, output: &str) {
+pub(in crate::agent::runtime) fn record_tool(state: &mut RunState, call: &ToolCall, output: &str) {
     if state.limits.step_extension.is_none() {
         return;
     }
@@ -197,7 +197,7 @@ pub(super) fn record_tool(state: &mut RunState, call: &ToolCall, output: &str) {
     record(state, hash);
 }
 
-pub(super) fn record_node(state: &mut RunState, id: &str, version: u64) {
+pub(in crate::agent::runtime) fn record_node(state: &mut RunState, id: &str, version: u64) {
     if state.limits.step_extension.is_none() {
         return;
     }
@@ -206,7 +206,7 @@ pub(super) fn record_node(state: &mut RunState, id: &str, version: u64) {
     record(state, hash);
 }
 
-pub(super) fn record_control(state: &mut RunState, kind: &str, identity: &[u8]) {
+pub(in crate::agent::runtime) fn record_control(state: &mut RunState, kind: &str, identity: &[u8]) {
     if state.limits.step_extension.is_some() {
         record(state, fingerprint(kind.as_bytes(), identity));
     }
@@ -241,7 +241,7 @@ fn add(hash: &mut u64, bytes: &[u8]) {
     }
 }
 
-pub(super) fn validate(state: &RunState) -> Result<(), RuntimeError> {
+pub(in crate::agent::runtime) fn validate(state: &RunState) -> Result<(), RuntimeError> {
     let Some(progress) = &state.budget.step_progress else {
         return Ok(());
     };

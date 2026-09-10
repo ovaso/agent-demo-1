@@ -1,7 +1,6 @@
 use agent_core::model::{ModelError, ModelRequest};
 pub(super) const OPENAI: &str = "openai-chat-completions";
 pub(super) const ANTHROPIC: &str = "anthropic-messages";
-pub(super) const MAX_RESPONSE_BYTES: u64 = 8 * 1024 * 1024;
 
 pub(super) fn binding(protocol: &str, model: &str, url: &str) -> String {
     // Do not persist URL credentials or query parameters. Ports may change on

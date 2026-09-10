@@ -1,8 +1,9 @@
-use super::super::{
+use super::super::{LoopPhase, PauseReason, RunState, RunStatus, RunStore, Runtime, RuntimeError};
+use crate::agent::runtime::{budget, prompt};
+use crate::agent::{
     AgentError, AgentResult,
     model_step::{self, ModelStep},
 };
-use super::{LoopPhase, PauseReason, RunState, RunStatus, RunStore, Runtime, RuntimeError};
 use crate::{
     context::Message,
     memory::MemoryStore,
@@ -12,14 +13,14 @@ use crate::{
 use std::collections::BTreeSet;
 
 impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, S, T> {
-    pub(super) fn call_model(
+    pub(in crate::agent::runtime) fn call_model(
         &mut self,
         state: &mut RunState,
         on_text: &mut dyn FnMut(&str),
         trace: &mut RunTrace,
     ) -> Result<(), RuntimeError> {
         if state.budget.model_calls >= state.limits.max_steps {
-            if let Some(grant) = super::step_budget::extend(state) {
+            if let Some(grant) = budget::steps::extend(state) {
                 // Persist the grant before another model request; a restart cannot
                 // spend the same progress twice or reset the extension counter.
                 self.commit(state)?;
@@ -40,15 +41,20 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             .agent_policy()
             .is_some_and(|policy| policy.model_calls >= policy.max_steps)
         {
-            super::graph_execution::finish_node(
+            super::graph::finish_node(
                 state,
-                super::super::graph::NodeStatus::BudgetExceeded,
+                crate::agent::graph::NodeStatus::BudgetExceeded,
                 Some("局部模型步数已用完，需要协调者调整额度或取消。".into()),
                 None,
             )?;
             return self.commit(state);
         }
-        let (messages, tools, change, compacted) = match super::model_input::prepare(state) {
+        let prompt::input::Prepared {
+            messages,
+            tools,
+            change,
+            compacted,
+        } = match prompt::input::prepare(state) {
             Ok(prepared) => prepared,
             Err(error) => {
                 state.status = RunStatus::Paused(PauseReason::Limit(error.to_string()));
@@ -131,7 +137,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         let stop = response.stop_reason().clone();
         let (text, calls, continuation) = response.into_reply_parts();
         let mut ids = BTreeSet::new();
-        if super::serialization::check(
+        if super::super::serialization::check(
             &(&text, &calls, &continuation),
             state.limits.max_context_bytes,
         )
@@ -167,11 +173,11 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 .context
                 .push(Message::assistant_reply(&text, Vec::new(), continuation));
             if state.graph.active.is_some() {
-                super::graph_execution::finish_node(
+                super::graph::finish_node(
                     state,
-                    super::super::graph::NodeStatus::Succeeded,
+                    crate::agent::graph::NodeStatus::Succeeded,
                     Some(text),
-                    Some(super::super::graph::ValidationKind::ModelReported),
+                    Some(crate::agent::graph::ValidationKind::ModelReported),
                 )?;
                 return self.commit(state);
             }
@@ -180,7 +186,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                     RunStatus::Paused(PauseReason::GraphBlocked("仍有未完成工作或委托".into()));
                 return self.commit(state);
             }
-            if state.intent == super::WorkIntent::PlanOnly {
+            if state.intent == super::super::WorkIntent::PlanOnly {
                 state.status = RunStatus::Paused(if state.plans.current().is_some() {
                     PauseReason::PlanReady
                 } else {

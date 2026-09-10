@@ -1,5 +1,10 @@
+use super::OpenAiCompatibleProvider;
 use super::helpers::arguments_json;
-use agent_core::{context::Message, model::ModelError, tool::ToolDefinition};
+use agent_core::{
+    context::Message,
+    model::{ModelError, ModelRequest},
+    tool::ToolDefinition,
+};
 use serde_json::{Map, Value, json};
 pub(super) fn messages(
     messages: &[Message],
@@ -111,4 +116,37 @@ pub(super) fn tools(definitions: &[ToolDefinition]) -> Vec<Value> {
             })
         })
         .collect()
+}
+
+impl OpenAiCompatibleProvider {
+    pub(super) fn request_body(&self, request: &ModelRequest<'_>) -> Result<Value, ModelError> {
+        super::super::continuation::validate(
+            request,
+            super::super::continuation::OPENAI,
+            &super::super::continuation::binding(
+                super::super::continuation::OPENAI,
+                &self.model,
+                &self.base_url,
+            ),
+        )?;
+        let mut body = json!({
+            "model": self.model,
+            "messages": messages(request.messages(), request.memories())?,
+            "tools": tools(request.tools()),
+            "tool_choice": "auto",
+        });
+        if let Some(limit) = request.max_output_tokens() {
+            let first_party = reqwest::Url::parse(&self.base_url)
+                .ok()
+                .is_some_and(|u| u.host_str() == Some("api.openai.com"));
+            let field = self.max_tokens_field.as_deref().unwrap_or(if first_party {
+                "max_completion_tokens"
+            } else {
+                "max_tokens"
+            });
+            body[field] = json!(limit);
+        }
+        super::super::cache::reasoning(&mut body, self.reasoning_effort.as_deref(), &self.base_url);
+        Ok(body)
+    }
 }

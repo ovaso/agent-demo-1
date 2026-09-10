@@ -2,6 +2,7 @@ use super::{
     LoopPhase, PauseReason, RunBudget, RunLimits, RunState, RunStatus, RunStore, Runtime,
     RuntimeError,
 };
+use crate::agent::runtime::{coordination, execution};
 use crate::{
     context::Context, memory::MemoryStore, model::ModelProvider, tool::ToolOutput, trace::TraceSink,
 };
@@ -134,9 +135,9 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 .push_tool(call.id(), call.name(), "未执行：任务已取消");
         }
         if state.graph.active.is_some() {
-            super::graph_execution::finish_node(
+            execution::graph::finish_node(
                 &mut state,
-                super::super::graph::NodeStatus::Cancelled,
+                crate::agent::graph::NodeStatus::Cancelled,
                 None,
                 None,
             )?;
@@ -145,15 +146,15 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             for node in graph.nodes.values_mut() {
                 if !matches!(
                     node.status,
-                    super::super::graph::NodeStatus::Succeeded
-                        | super::super::graph::NodeStatus::Failed
+                    crate::agent::graph::NodeStatus::Succeeded
+                        | crate::agent::graph::NodeStatus::Failed
                 ) {
-                    node.status = super::super::graph::NodeStatus::Cancelled;
+                    node.status = crate::agent::graph::NodeStatus::Cancelled;
                 }
             }
         }
         state.status = RunStatus::Cancelled;
-        super::message_delivery::cancel_all(&mut state, "根任务已取消");
+        coordination::delivery::cancel_all(&mut state, "根任务已取消");
         self.commit(&mut state)?;
         Ok(state)
     }

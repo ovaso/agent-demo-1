@@ -1,9 +1,10 @@
-use super::super::{
+use super::super::{LoopPhase, RunState, RunStatus, RunStore, Runtime, RuntimeError};
+use crate::agent::runtime::{budget, coordination};
+use crate::agent::{
     graph::{NodeStatus, ValidationKind},
     planning::{TaskAction, ToolCheck},
     routing::ExecutionMode,
 };
-use super::{LoopPhase, RunState, RunStatus, RunStore, Runtime, RuntimeError};
 use crate::{
     context::{Context, Message},
     memory::MemoryStore,
@@ -15,16 +16,16 @@ use std::mem;
 
 impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, S, T> {
     /// true 表示本次调度已推进图阶段，false 表示交回协调者 Loop。
-    pub(super) fn graph_step(
+    pub(in crate::agent::runtime) fn graph_step(
         &mut self,
         state: &mut RunState,
         trace: &mut RunTrace,
     ) -> Result<bool, RuntimeError> {
-        super::message_delivery::tick(state, super::collaboration::now_ms());
-        super::graph_control::apply_route(state)?;
+        coordination::delivery::tick(state, coordination::messages::now_ms());
+        coordination::graph::apply_route(state)?;
         if let Some(id) = state.graph.active.clone() {
             if let LoopPhase::Waiting { request_id } = state.phase.clone() {
-                match super::message_delivery::wait_result(state, &request_id)? {
+                match coordination::delivery::wait_result(state, &request_id)? {
                     Some(result) => {
                         self.accept_tool(state, crate::tool::ToolOutput::text(result.text))?;
                         state.last_tool_succeeded = None;
@@ -194,7 +195,7 @@ fn start_node(state: &mut RunState, id: &str) -> Result<(), RuntimeError> {
     Ok(())
 }
 
-pub(super) fn finish_node(
+pub(in crate::agent::runtime) fn finish_node(
     state: &mut RunState,
     status: NodeStatus,
     output: Option<String>,
@@ -225,7 +226,7 @@ pub(super) fn finish_node(
         node.validation = validation;
     }
     if status == NodeStatus::Succeeded {
-        super::step_budget::record_node(state, &id, version);
+        budget::steps::record_node(state, &id, version);
     }
     state.phase = LoopPhase::Model;
     state.status = RunStatus::Running;

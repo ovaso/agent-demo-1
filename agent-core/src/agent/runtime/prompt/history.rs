@@ -1,14 +1,14 @@
 //! Per-actor observations. Model-visible state is appended, never replaced in history.
-use super::{RunState, RuntimeError};
+use super::super::{RunState, RuntimeError};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 
-pub(super) const SNAPSHOT_PREFIX: &str = "运行状态（数据）：";
-pub(super) const DELTA_PREFIX: &str = "运行状态增量（数据）：";
+pub(in crate::agent::runtime) const SNAPSHOT_PREFIX: &str = "运行状态（数据）：";
+pub(in crate::agent::runtime) const DELTA_PREFIX: &str = "运行状态增量（数据）：";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct PromptHistory {
+pub(in crate::agent::runtime) struct PromptHistory {
     #[serde(default)]
     version: u8,
     #[serde(default)]
@@ -20,7 +20,7 @@ struct Frame {
     value: Value,
 }
 #[derive(Serialize)]
-pub(super) struct Change {
+pub(in crate::agent::runtime) struct Change {
     actor: String,
     full_snapshot: bool,
     history_generation: u64,
@@ -28,7 +28,7 @@ pub(super) struct Change {
 }
 
 impl PromptHistory {
-    pub(super) fn validate(&self) -> Result<(), RuntimeError> {
+    pub(in crate::agent::runtime) fn validate(&self) -> Result<(), RuntimeError> {
         if self.version > 1
             || self.frames.len() > 65
             || self.frames.values().any(|f| !f.value.is_object())
@@ -39,7 +39,9 @@ impl PromptHistory {
     }
 }
 
-pub(super) fn append(state: &mut RunState) -> Result<Option<Change>, RuntimeError> {
+pub(in crate::agent::runtime) fn append(
+    state: &mut RunState,
+) -> Result<Option<Change>, RuntimeError> {
     if !state.planning && state.graph.current().is_none() {
         return Ok(None);
     }
@@ -59,7 +61,7 @@ pub(super) fn append(state: &mut RunState) -> Result<Option<Change>, RuntimeErro
                 .is_some_and(|id| graph.is_some_and(|g| g.nodes.contains_key(id)))
     });
     let actor = state.actor();
-    let next = super::planning_view::value(state)?;
+    let next = super::view::value(state)?;
     let old = state.prompt_history.frames.get(&actor);
     let generation = state.context.generation();
     let has_snapshot = state
@@ -82,15 +84,18 @@ pub(super) fn append(state: &mut RunState) -> Result<Option<Change>, RuntimeErro
         .cloned()
         .collect();
     let prefix = if full { SNAPSHOT_PREFIX } else { DELTA_PREFIX };
-    let message =
-        super::serialization::encode_prefixed(&patch, prefix, state.limits.max_context_bytes)?;
+    let message = super::super::serialization::encode_prefixed(
+        &patch,
+        prefix,
+        state.limits.max_context_bytes,
+    )?;
     state.context.push_observation(message);
     // Appending the delta itself can cross the count boundary. Establish a new
     // complete view in the same request if that removed its supporting history.
     if !full && state.context.generation() != generation {
         state
             .context
-            .push_observation(super::serialization::encode_prefixed(
+            .push_observation(super::super::serialization::encode_prefixed(
                 &next,
                 SNAPSHOT_PREFIX,
                 state.limits.max_context_bytes,

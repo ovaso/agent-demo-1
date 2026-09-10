@@ -6,6 +6,7 @@ mod continuation;
 mod input;
 mod openai;
 mod stop_reason;
+mod transport;
 
 pub(crate) use anthropic::AnthropicProvider;
 pub(crate) use openai::OpenAiCompatibleProvider;

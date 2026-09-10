@@ -1,15 +1,16 @@
-use super::planning_tools::{ControlOutput, number, required};
-use super::{RunState, RuntimeError};
+use super::super::{RunState, RuntimeError};
+use super::invocation::{ControlOutput, number, required};
+use crate::agent::runtime::coordination;
 use crate::tool::{Parameter, ToolCall, ToolDefinition};
 
-pub(super) fn handles(name: &str) -> bool {
+pub(in crate::agent::runtime) fn handles(name: &str) -> bool {
     matches!(
         name,
         "runtime_send" | "runtime_ask" | "runtime_reply" | "runtime_wait" | "runtime_inbox"
     )
 }
 
-pub(super) fn definitions() -> Vec<ToolDefinition> {
+pub(in crate::agent::runtime) fn definitions() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition::new(
             "runtime_send",
@@ -51,7 +52,10 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
     ]
 }
 
-pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOutput, RuntimeError> {
+pub(in crate::agent::runtime) fn invoke(
+    state: &mut RunState,
+    call: &ToolCall,
+) -> Result<ControlOutput, RuntimeError> {
     let allowed: &[&str] = match call.name() {
         "runtime_send" => &["to", "body"],
         "runtime_ask" => &["to", "body", "timeout_ms", "wait"],
@@ -67,8 +71,8 @@ pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOut
     {
         return Err(RuntimeError::Invalid("协作工具包含未知参数".into()));
     }
-    let now = super::collaboration::now_ms();
-    super::message_delivery::tick(state, now);
+    let now = coordination::messages::now_ms();
+    coordination::delivery::tick(state, now);
     let mut wait_request = None;
     let mut abort_batch = false;
     let text = match call.name() {
@@ -86,7 +90,7 @@ pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOut
             } else {
                 None
             };
-            let id = super::collaboration::send(
+            let id = coordination::messages::send(
                 state,
                 required(call, "to")?,
                 required(call, "body")?,
@@ -101,7 +105,7 @@ pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOut
             serde_json::json!({"message_id":id,"status":"queued"}).to_string()
         }
         "runtime_reply" => {
-            super::collaboration::reply(
+            coordination::messages::reply(
                 state,
                 required(call, "request")?,
                 required(call, "body")?,
@@ -118,14 +122,14 @@ pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOut
                 ));
             }
             let id = required(call, "request")?;
-            match super::message_delivery::wait_result(state, id)? {
+            match coordination::delivery::wait_result(state, id)? {
                 Some(result) => {
                     abort_batch = !result.succeeded;
                     result.text
                 }
                 None => {
                     let request = state.collaboration.get(id).expect("validated request");
-                    super::collaboration::check_wait(state, &state.actor(), &request.to)?;
+                    coordination::messages::check_wait(state, &state.actor(), &request.to)?;
                     wait_request = Some(id.into());
                     String::new()
                 }
@@ -138,12 +142,12 @@ pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOut
                 .map(number)
                 .transpose()?
                 .unwrap_or(0);
-            let views = super::message_delivery::inbox(state, after, false);
+            let views = coordination::delivery::inbox(state, after, false);
             let cursor = views
                 .last()
                 .and_then(|value| value["sequence"].as_u64())
                 .unwrap_or(after);
-            super::message_delivery::mark_seen(state, &views);
+            coordination::delivery::mark_seen(state, &views);
             serde_json::json!({"messages":views,"next_cursor":cursor,"latest_sequence":state.collaboration.sequence()}).to_string()
         }
         _ => unreachable!(),

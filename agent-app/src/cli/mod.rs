@@ -7,6 +7,7 @@ use rustyline::error::ReadlineError;
 use std::error::Error;
 
 mod commands;
+mod dispatch;
 mod session;
 mod view;
 

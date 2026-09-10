@@ -1,19 +1,14 @@
-use super::super::{
+use super::super::{RunState, RuntimeError, WorkIntent};
+use super::invocation::{ControlOutput, number, required};
+use crate::agent::runtime::coordination;
+use crate::agent::{
     blackboard::{BoardUpdate, EntryKind},
     planning::Plan,
 };
-use super::{RunState, RuntimeError, WorkIntent};
 use crate::tool::{Parameter, ToolCall, ToolDefinition};
 
-pub(super) struct ControlOutput {
-    pub abort_batch: bool,
-    pub wait_request: Option<String>,
-    pub text: String,
-    pub plan_ready: bool,
-}
-
-pub(super) fn definitions() -> Vec<ToolDefinition> {
-    let mut tools = vec![
+pub(in crate::agent::runtime) fn definitions() -> Vec<ToolDefinition> {
+    vec![
         ToolDefinition::new(
             "runtime_plan",
             "提交或修订结构化计划。计划 JSON 含 goal、requirements 字符串数组、tasks 数组。每个任务含 id、description、depends_on、acceptance、action。action 为 {\"kind\":\"agent\",\"prompt\":\"...\"} 或 {\"kind\":\"tool\",\"name\":\"...\",\"arguments\":{\"参数\":\"值\"},\"check\":\"succeeded\"/\"exit_code_zero\"}。goal 由运行时固定为原任务；旧验收要求必须保留。",
@@ -59,23 +54,14 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
             "重试已知失败的只读或验证节点，每节点最多 3 次；普通写入节点需操作者明确重试。",
             vec![Parameter::required("node", "任务 ID")],
         ).with_metadata(1789008818, "v1.0.0-20260910"),
-    ];
-    tools.extend(super::agent_tools::definitions());
-    tools.extend(super::message_tools::definitions());
-    tools
+    ]
 }
 
-pub(super) fn invoke(
+pub(in crate::agent::runtime) fn invoke(
     state: &mut RunState,
     call: &ToolCall,
     tools: &crate::tool::Registry,
 ) -> Result<ControlOutput, RuntimeError> {
-    if super::message_tools::handles(call.name()) {
-        return super::message_tools::invoke(state, call);
-    }
-    if super::agent_tools::handles(call.name()) {
-        return super::agent_tools::invoke(state, call);
-    }
     let allowed: &[&str] = match call.name() {
         "runtime_plan" => &["expected_revision", "plan"],
         "runtime_board_write" => &["update"],
@@ -117,24 +103,17 @@ pub(super) fn invoke(
                         .validate(call.name(), call.arguments())
                         .map_err(|error| RuntimeError::Invalid(error.to_string()))?;
                 }
-                if let super::super::planning::TaskAction::Tool { name, .. } = &task.action
+                if let crate::agent::planning::TaskAction::Tool { name, .. } = &task.action
                     && !state.tools.iter().any(|tool| tool.name() == name)
                 {
                     return Err(RuntimeError::Invalid(format!("计划引用未注册工具：{name}")));
                 }
             }
-            let revision = state
-                .plans
-                .propose(number(required(call, "expected_revision")?)?, plan)?;
-            super::message_delivery::supersede(state);
-            if state.graph.current().is_some() {
-                state.graph.bind(
-                    revision,
-                    state.plans.current().expect("saved plan"),
-                    state.work_revision,
-                )?;
-            }
-            super::step_budget::record_control(state, "plan", &revision.to_le_bytes());
+            let revision = coordination::plans::save(
+                state,
+                number(required(call, "expected_revision")?)?,
+                plan,
+            )?;
             serde_json::json!({"plan_version": revision}).to_string()
         }
         "runtime_board_write" => {
@@ -180,19 +159,19 @@ pub(super) fn invoke(
         }
         "runtime_route" => {
             let mode = match required(call, "mode")? {
-                "loop" => super::super::routing::ExecutionMode::Loop,
-                "graph" => super::super::routing::ExecutionMode::Graph,
+                "loop" => crate::agent::routing::ExecutionMode::Loop,
+                "graph" => crate::agent::routing::ExecutionMode::Graph,
                 _ => return Err(RuntimeError::Invalid("mode 必须为 loop 或 graph".into())),
             };
-            super::graph_control::request_route(state, mode, required(call, "reason")?)?;
+            coordination::graph::request_route(state, mode, required(call, "reason")?)?;
             "模式选择已记录，工具批次结算后生效。".into()
         }
         "runtime_run_node" => {
-            super::graph_control::request_node(state, required(call, "node")?)?;
+            coordination::graph::request_node(state, required(call, "node")?)?;
             "节点已排入调度。".into()
         }
         "runtime_retry_node" => {
-            super::graph_control::request_retry(state, required(call, "node")?, false)?;
+            coordination::graph::request_retry(state, required(call, "node")?, false)?;
             "重试已排入调度。".into()
         }
         _ => unreachable!(),
@@ -241,16 +220,4 @@ fn read_board(state: &RunState, call: &ToolCall) -> Result<String, RuntimeError>
         entries.push(entry);
     }
     Ok(serde_json::json!({"entries":entries,"next_cursor":next_cursor,"latest_sequence":state.blackboard.sequence()}).to_string())
-}
-
-pub(super) fn required<'a>(call: &'a ToolCall, name: &str) -> Result<&'a str, RuntimeError> {
-    call.arguments()
-        .get(name)
-        .ok_or_else(|| RuntimeError::Invalid(format!("缺少参数 {name}")))
-}
-
-pub(super) fn number(value: &str) -> Result<u64, RuntimeError> {
-    value
-        .parse()
-        .map_err(|_| RuntimeError::Invalid("参数必须为非负整数".into()))
 }

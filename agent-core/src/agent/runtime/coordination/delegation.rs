@@ -1,9 +1,10 @@
-use super::super::{
+use super::super::{RunState, RunStore, Runtime, RuntimeError, WorkIntent};
+use crate::agent::runtime::{budget, execution};
+use crate::agent::{
     delegation::{AgentPolicy, AgentSpec, NodeOrigin},
     graph::{GraphRun, NodeRun, NodeStatus},
     planning::{PlanTask, TaskAction},
 };
-use super::{RunState, RunStore, Runtime, RuntimeError, WorkIntent};
 use crate::{memory::MemoryStore, model::ModelProvider, trace::TraceSink};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -34,13 +35,16 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         let mut state = self.state(id)?;
         Self::check_editable(&state)?;
         cancel(&mut state, agent, true)?;
-        super::message_delivery::tick(&mut state, super::collaboration::now_ms());
+        super::delivery::tick(&mut state, super::messages::now_ms());
         self.commit(&mut state)?;
         Ok(state)
     }
 }
 
-pub(super) fn create(state: &mut RunState, spec: AgentSpec) -> Result<(), RuntimeError> {
+pub(in crate::agent::runtime) fn create(
+    state: &mut RunState,
+    spec: AgentSpec,
+) -> Result<(), RuntimeError> {
     if state.graph.active.is_some() {
         return Err(RuntimeError::Invalid(
             "当前由协调者统一创建子 Agent，请交回协调者分派".into(),
@@ -134,11 +138,11 @@ pub(super) fn create(state: &mut RunState, spec: AgentSpec) -> Result<(), Runtim
     graph.nodes.insert(spec.name, node);
     state.delegations_created += 1;
     let sequence = state.delegations_created as u64;
-    super::step_budget::record_control(state, "delegate", &sequence.to_le_bytes());
+    budget::steps::record_control(state, "delegate", &sequence.to_le_bytes());
     Ok(())
 }
 
-pub(super) fn budget(
+pub(in crate::agent::runtime) fn budget(
     state: &mut RunState,
     id: &str,
     max_steps: u64,
@@ -175,14 +179,18 @@ pub(super) fn budget(
     Ok(())
 }
 
-pub(super) fn cancel(state: &mut RunState, id: &str, operator: bool) -> Result<(), RuntimeError> {
+pub(in crate::agent::runtime) fn cancel(
+    state: &mut RunState,
+    id: &str,
+    operator: bool,
+) -> Result<(), RuntimeError> {
     if !operator && state.graph.active.is_some() {
         return Err(RuntimeError::Invalid(
             "需先在安全边界交回协调者，再取消子任务".into(),
         ));
     }
     if state.graph.active_node() == Some(id) {
-        if let super::LoopPhase::ToolInFlight { call_id } = &state.phase {
+        if let super::super::LoopPhase::ToolInFlight { call_id } = &state.phase {
             return Err(RuntimeError::NeedsResolution(call_id.clone()));
         }
         let status = state.status.clone();
@@ -191,7 +199,7 @@ pub(super) fn cancel(state: &mut RunState, id: &str, operator: bool) -> Result<(
                 .context
                 .push_tool(call.id(), call.name(), "未执行：操作者取消任务");
         }
-        super::graph_execution::finish_node(state, NodeStatus::Cancelled, None, None)?;
+        execution::graph::finish_node(state, NodeStatus::Cancelled, None, None)?;
         state.status = status;
         return Ok(());
     }

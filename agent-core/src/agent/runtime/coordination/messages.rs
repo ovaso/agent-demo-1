@@ -1,8 +1,9 @@
-use super::super::{
+use super::super::{LoopPhase, RunState, RunStore, Runtime, RuntimeError};
+use crate::agent::runtime::budget;
+use crate::agent::{
     collaboration::{CollaborationMessage, MAX_MESSAGE_BYTES, MAX_MESSAGES, MessageStatus},
     graph::NodeStatus,
 };
-use super::{LoopPhase, RunState, RunStore, Runtime, RuntimeError};
 use crate::{memory::MemoryStore, model::ModelProvider, trace::TraceSink};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -38,14 +39,17 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
     }
 }
 
-pub(super) fn now_ms() -> u64 {
+pub(in crate::agent::runtime) fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
 }
 
-pub(super) fn binding(state: &RunState, actor: &str) -> Result<u32, RuntimeError> {
+pub(in crate::agent::runtime) fn binding(
+    state: &RunState,
+    actor: &str,
+) -> Result<u32, RuntimeError> {
     if matches!(actor, "main" | "operator") {
         return Ok(0);
     }
@@ -68,13 +72,13 @@ pub(super) fn binding(state: &RunState, actor: &str) -> Result<u32, RuntimeError
             "接收者或发送者已经结束，不会因消息自动重启".into(),
         ));
     }
-    if !graph.engaged && node.origin == super::super::delegation::NodeOrigin::Planned {
+    if !graph.engaged && node.origin == crate::agent::delegation::NodeOrigin::Planned {
         return Err(RuntimeError::Invalid("该计划节点尚未启用执行".into()));
     }
     Ok(node.attempts + u32::from(node.status == NodeStatus::Pending))
 }
 
-pub(super) fn send(
+pub(in crate::agent::runtime) fn send(
     state: &mut RunState,
     to: &str,
     body: &str,
@@ -147,7 +151,7 @@ pub(super) fn send(
     Ok(id)
 }
 
-pub(super) fn reply(
+pub(in crate::agent::runtime) fn reply(
     state: &mut RunState,
     id: &str,
     body: &str,
@@ -205,11 +209,15 @@ pub(super) fn reply(
         declined,
     };
     message.sequence = sequence;
-    super::step_budget::record_control(state, "reply", id.as_bytes());
+    budget::steps::record_control(state, "reply", id.as_bytes());
     Ok(())
 }
 
-pub(super) fn check_wait(state: &RunState, from: &str, to: &str) -> Result<(), RuntimeError> {
+pub(in crate::agent::runtime) fn check_wait(
+    state: &RunState,
+    from: &str,
+    to: &str,
+) -> Result<(), RuntimeError> {
     let mut edges: BTreeMap<String, Vec<String>> = BTreeMap::new();
     if let Some(graph) = state.graph.current() {
         for (id, node) in &graph.nodes {

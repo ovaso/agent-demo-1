@@ -1,3 +1,6 @@
+pub(super) mod steps;
+pub(super) mod tokens;
+
 use super::RuntimeError;
 use serde::{Deserialize, Serialize};
 
@@ -54,7 +57,7 @@ impl RunLimits {
         }
     }
 
-    pub(crate) fn validate(&self) -> Result<(), RuntimeError> {
+    pub(super) fn validate(&self) -> Result<(), RuntimeError> {
         if self.max_steps == 0
             || self.max_delegations == 0
             || self.max_tool_calls == 0
@@ -93,12 +96,12 @@ fn default_delegations() -> usize {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunBudget {
     #[serde(default)]
-    pub(crate) token_usage: super::TokenUsage,
-    pub(crate) model_calls: u64,
-    pub(crate) tool_calls: u64,
-    pub(crate) transitions: u64,
+    pub(super) token_usage: super::TokenUsage,
+    pub(super) model_calls: u64,
+    pub(super) tool_calls: u64,
+    pub(super) transitions: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) step_progress: Option<super::step_budget::StepProgress>,
+    pub(super) step_progress: Option<steps::StepProgress>,
 }
 
 impl RunBudget {

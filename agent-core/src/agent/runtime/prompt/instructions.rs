@@ -1,7 +1,8 @@
-use super::{RunState, RuntimeError};
+use super::super::{RunState, RuntimeError};
+use crate::agent::runtime::tools;
 use crate::{context::Message, tool::ToolDefinition};
 
-pub(super) fn request_context(
+pub(in crate::agent::runtime) fn request_context(
     state: &RunState,
 ) -> Result<(Vec<Message>, Vec<ToolDefinition>), RuntimeError> {
     let mut messages = state.context.snapshot();
@@ -13,7 +14,7 @@ pub(super) fn request_context(
         .collect();
     if state.planning || state.graph.current().is_some() {
         if state.planning {
-            tools.extend(super::planning_tools::definitions());
+            tools.extend(tools::definitions());
         }
         if state.graph.active.is_some() {
             tools.retain(|tool| {
@@ -41,6 +42,6 @@ pub(super) fn request_context(
     // Runtime capabilities use their own dispatch path, but the combined model
     // schema must have a stable order independent of group registration order.
     tools.sort_unstable_by(|left, right| left.sort_key().cmp(&right.sort_key()));
-    super::serialization::check(&messages, state.limits.max_context_bytes)?;
+    super::super::serialization::check(&messages, state.limits.max_context_bytes)?;
     Ok((messages, tools))
 }

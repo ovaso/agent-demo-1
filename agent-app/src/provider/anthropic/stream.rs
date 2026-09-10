@@ -14,7 +14,7 @@ pub(super) fn parse_stream(
     let mut stop = None;
     let mut finished = false;
     for line in response
-        .take(super::super::continuation::MAX_RESPONSE_BYTES)
+        .take(super::super::transport::MAX_RESPONSE_BYTES)
         .lines()
     {
         let line = line.map_err(ModelError::new)?;

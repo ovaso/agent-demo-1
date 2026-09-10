@@ -1,8 +1,8 @@
-use super::super::{
+use super::super::{LoopPhase, RunState, RuntimeError};
+use crate::agent::{
     collaboration::{CollaborationMessage, MessageStatus},
     graph::NodeStatus,
 };
-use super::{LoopPhase, RunState, RuntimeError};
 use serde_json::{Value, json};
 
 fn matches_actor(state: &RunState, actor: &str, attempt: u32, version: u64) -> bool {
@@ -13,10 +13,10 @@ fn matches_actor(state: &RunState, actor: &str, attempt: u32, version: u64) -> b
         .graph
         .current()
         .is_some_and(|graph| graph.plan_version == version)
-        && super::collaboration::binding(state, actor).ok() == Some(attempt)
+        && super::messages::binding(state, actor).ok() == Some(attempt)
 }
 
-pub(super) fn tick(state: &mut RunState, now: u64) {
+pub(in crate::agent::runtime) fn tick(state: &mut RunState, now: u64) {
     let changes: Vec<_> = state
         .collaboration
         .messages
@@ -88,7 +88,7 @@ pub(super) fn tick(state: &mut RunState, now: u64) {
     }
 }
 
-pub(super) fn view(message: &CollaborationMessage, actor: &str) -> Value {
+pub(in crate::agent::runtime) fn view(message: &CollaborationMessage, actor: &str) -> Value {
     let (body, by) = if message.from == actor {
         match &message.status {
             MessageStatus::Answered { by, body, .. } => (body.as_str(), by.as_str()),
@@ -102,7 +102,7 @@ pub(super) fn view(message: &CollaborationMessage, actor: &str) -> Value {
     json!({"id":message.id,"sequence":message.sequence,"from":message.from,"to":message.to,"plan_version":message.plan_version,"status":message.status.label(),"body":body,"by":by,"deadline_ms":message.deadline_ms})
 }
 
-pub(super) fn inbox(state: &RunState, after: u64, unseen: bool) -> Vec<Value> {
+pub(in crate::agent::runtime) fn inbox(state: &RunState, after: u64, unseen: bool) -> Vec<Value> {
     let actor = state.actor();
     let mut messages: Vec<_> = state
         .collaboration
@@ -141,7 +141,7 @@ pub(super) fn inbox(state: &RunState, after: u64, unseen: bool) -> Vec<Value> {
     result
 }
 
-pub(super) fn mark_seen(state: &mut RunState, views: &[Value]) {
+pub(in crate::agent::runtime) fn mark_seen(state: &mut RunState, views: &[Value]) {
     let actor = state.actor();
     for view in views {
         if let Some(id) = view["id"].as_str()
@@ -157,12 +157,12 @@ pub(super) fn mark_seen(state: &mut RunState, views: &[Value]) {
     }
 }
 
-pub(super) struct WaitResult {
+pub(in crate::agent::runtime) struct WaitResult {
     pub text: String,
     pub succeeded: bool,
 }
 
-pub(super) fn wait_result(
+pub(in crate::agent::runtime) fn wait_result(
     state: &mut RunState,
     id: &str,
 ) -> Result<Option<WaitResult>, RuntimeError> {
@@ -205,7 +205,7 @@ pub(super) fn wait_result(
     }))
 }
 
-pub(super) fn cancel_all(state: &mut RunState, reason: &str) {
+pub(in crate::agent::runtime) fn cancel_all(state: &mut RunState, reason: &str) {
     for message in state.collaboration.messages.values_mut() {
         if message.status == MessageStatus::Pending {
             state.collaboration.sequence += 1;
@@ -217,7 +217,7 @@ pub(super) fn cancel_all(state: &mut RunState, reason: &str) {
     }
 }
 
-pub(super) fn supersede(state: &mut RunState) {
+pub(in crate::agent::runtime) fn supersede(state: &mut RunState) {
     cancel_all(state, "计划已修订，旧请求失效");
     let settled: Vec<_> = state
         .graph

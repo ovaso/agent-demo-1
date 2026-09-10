@@ -1,4 +1,6 @@
-use super::{RunState, RuntimeError};
+use super::{RunLease, RunStore, check_size};
+use crate::agent::runtime::RunStatus;
+use crate::agent::runtime::{RunState, RuntimeError};
 use std::{
     collections::BTreeMap,
     sync::{
@@ -6,34 +8,6 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
-
-/// 覆盖模型和工具执行的排他所有权；释放所有权不撤销已产生的外部副作用。
-pub struct RunLease {
-    pub(crate) memory: Option<Arc<AtomicBool>>,
-    #[cfg(feature = "sqlite")]
-    pub(crate) file: Option<std::fs::File>,
-}
-
-impl Drop for RunLease {
-    fn drop(&mut self) {
-        if let Some(busy) = &self.memory {
-            busy.store(false, Ordering::Release);
-        }
-        #[cfg(feature = "sqlite")]
-        if let Some(file) = &self.file {
-            let _ = file.unlock();
-        }
-    }
-}
-
-/// 原子保存完整执行检查点。自定义后端必须实现排他执行和版本比较。
-pub trait RunStore {
-    type Lease;
-    fn acquire(&self) -> Result<Self::Lease, RuntimeError>;
-    fn load(&self, run_id: &str) -> Result<Option<RunState>, RuntimeError>;
-    fn create(&mut self, state: &RunState) -> Result<(), RuntimeError>;
-    fn save(&mut self, state: &RunState, expected_revision: u64) -> Result<(), RuntimeError>;
-}
 
 #[derive(Default)]
 pub struct MemoryRunStore {
@@ -67,10 +41,7 @@ impl RunStore for MemoryRunStore {
         if self.states.contains_key(state.id())
             || self.states.values().any(|existing| {
                 existing.session_id == state.session_id
-                    && !matches!(
-                        existing.status,
-                        super::RunStatus::Completed | super::RunStatus::Cancelled
-                    )
+                    && !matches!(existing.status, RunStatus::Completed | RunStatus::Cancelled)
             })
         {
             return Err(RuntimeError::Conflict);
@@ -88,9 +59,4 @@ impl RunStore for MemoryRunStore {
         self.states.insert(state.id().to_owned(), state.clone());
         Ok(())
     }
-}
-
-pub(crate) fn check_size(state: &RunState) -> Result<(), RuntimeError> {
-    state.validate()?;
-    super::serialization::check(state, state.limits.max_checkpoint_bytes)
 }

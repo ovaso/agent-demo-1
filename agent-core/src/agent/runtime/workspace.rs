@@ -1,5 +1,6 @@
-use super::super::{blackboard::BoardUpdate, planning::Plan};
 use super::{RunState, RunStore, Runtime, RuntimeError};
+use crate::agent::runtime::coordination;
+use crate::agent::{blackboard::BoardUpdate, planning::Plan};
 use crate::{memory::MemoryStore, model::ModelProvider, trace::TraceSink};
 
 impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, S, T> {
@@ -36,16 +37,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         if state.graph.has_open_delegations() {
             return Err(RuntimeError::Invalid("需先结算委托再修订计划".into()));
         }
-        let revision = state.plans.propose(expected_revision, plan)?;
-        super::message_delivery::supersede(&mut state);
-        if state.graph.current().is_some() {
-            state.graph.bind(
-                state.plans.revision(),
-                state.plans.current().expect("saved plan"),
-                state.work_revision,
-            )?;
-        }
-        super::step_budget::record_control(&mut state, "plan", &revision.to_le_bytes());
+        coordination::plans::save(&mut state, expected_revision, plan)?;
         self.commit(&mut state)?;
         Ok(state)
     }

@@ -1,8 +1,9 @@
-use super::super::{
+use super::super::{LoopPhase, RunState, RunStore, Runtime, RuntimeError, WorkIntent};
+use crate::agent::runtime::execution;
+use crate::agent::{
     graph::NodeStatus,
     routing::{ExecutionMode, RouteChange},
 };
-use super::{LoopPhase, RunState, RunStore, Runtime, RuntimeError, WorkIntent};
 use crate::{memory::MemoryStore, model::ModelProvider, trace::TraceSink};
 
 impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, S, T> {
@@ -45,7 +46,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
     }
 }
 
-pub(super) fn request_route(
+pub(in crate::agent::runtime) fn request_route(
     state: &mut RunState,
     mode: ExecutionMode,
     reason: &str,
@@ -70,7 +71,7 @@ pub(super) fn request_route(
     Ok(())
 }
 
-pub(super) fn apply_route(state: &mut RunState) -> Result<(), RuntimeError> {
+pub(in crate::agent::runtime) fn apply_route(state: &mut RunState) -> Result<(), RuntimeError> {
     if state.phase != LoopPhase::Model || !state.pending.is_empty() {
         return Ok(());
     }
@@ -85,7 +86,7 @@ pub(super) fn apply_route(state: &mut RunState) -> Result<(), RuntimeError> {
             && state.graph.active.is_some()
             && state.agent_policy().is_some()
         {
-            super::graph_execution::finish_node(state, NodeStatus::NeedsCoordinator, None, None)?;
+            execution::graph::finish_node(state, NodeStatus::NeedsCoordinator, None, None)?;
         }
         state.routing.pending = None;
         return Ok(());
@@ -108,7 +109,7 @@ pub(super) fn apply_route(state: &mut RunState) -> Result<(), RuntimeError> {
         } else {
             NodeStatus::Paused
         };
-        super::graph_execution::finish_node(state, status, None, None)?;
+        execution::graph::finish_node(state, status, None, None)?;
     }
     state.routing.history.push(RouteChange {
         from: state.routing.mode,
@@ -122,7 +123,10 @@ pub(super) fn apply_route(state: &mut RunState) -> Result<(), RuntimeError> {
     Ok(())
 }
 
-pub(super) fn request_node(state: &mut RunState, id: &str) -> Result<(), RuntimeError> {
+pub(in crate::agent::runtime) fn request_node(
+    state: &mut RunState,
+    id: &str,
+) -> Result<(), RuntimeError> {
     if state.requested_node.is_some() {
         return Err(RuntimeError::Invalid("已有节点排队，请等待其调度".into()));
     }
@@ -151,7 +155,7 @@ pub(super) fn request_node(state: &mut RunState, id: &str) -> Result<(), Runtime
         .get(id)
         .ok_or_else(|| RuntimeError::NotFound(id.into()))?;
     if state.intent == WorkIntent::PlanOnly
-        && node.origin == super::super::delegation::NodeOrigin::Planned
+        && node.origin == crate::agent::delegation::NodeOrigin::Planned
     {
         return Err(RuntimeError::Invalid(
             "只规划模式不能启动执行计划节点".into(),
@@ -168,7 +172,7 @@ pub(super) fn request_node(state: &mut RunState, id: &str) -> Result<(), Runtime
     }) {
         return Err(RuntimeError::Invalid("节点尚未就绪或已经结束".into()));
     }
-    let planned = node.origin == super::super::delegation::NodeOrigin::Planned;
+    let planned = node.origin == crate::agent::delegation::NodeOrigin::Planned;
     state.requested_node = Some(id.into());
     if planned {
         state.graph.current_mut().expect("graph").engaged = true;
@@ -176,7 +180,7 @@ pub(super) fn request_node(state: &mut RunState, id: &str) -> Result<(), Runtime
     Ok(())
 }
 
-pub(super) fn request_retry(
+pub(in crate::agent::runtime) fn request_retry(
     state: &mut RunState,
     id: &str,
     operator: bool,
@@ -184,7 +188,7 @@ pub(super) fn request_retry(
     if state.requested_node.is_some() {
         return Err(RuntimeError::Invalid("已有节点排队".into()));
     }
-    use super::super::planning::{TaskAction, ToolCheck};
+    use crate::agent::planning::{TaskAction, ToolCheck};
     if state.intent == WorkIntent::PlanOnly || state.graph.active.is_some() {
         return Err(RuntimeError::Invalid("当前不能重试图节点".into()));
     }
@@ -213,7 +217,7 @@ pub(super) fn request_retry(
             "有写入能力的失败节点需操作者明确重试或重新规划".into(),
         ));
     }
-    node.history.push(super::super::graph::NodeAttempt {
+    node.history.push(crate::agent::graph::NodeAttempt {
         attempt: node.attempts,
         status: node.status,
         output: std::mem::take(&mut node.output),

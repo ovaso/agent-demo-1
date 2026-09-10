@@ -7,10 +7,14 @@
 
 ## 代码放置与模块边界
 
+- 统一采用目录入口 `模块名/mod.rs`：有子模块时不再混用 `模块名.rs` 与同名目录；没有子模块的叶子实现使用普通 `.rs` 文件。入口主要保留模块声明、导出及紧密相关的接口和类型。
 - `agent-core`：可复用的 Agent 执行逻辑与抽象。`agent/` 负责执行流程，`model/` 负责模型接口，`context/` 负责会话上下文，`memory/` 负责长期记忆，`tool/` 负责工具定义与注册，`trace/` 负责追踪。
 - `agent-app`：应用装配、配置、CLI 交互和具体模型服务适配。环境变量、终端输出、HTTP 协议细节放在这里，不下沉到 `agent-core`。
+- `agent-app-tool`：应用内置的文件、搜索、进程及验证工具；进程启动和有界输出集中复用。`agent-tool-debug` 仅提供调试工具，通过应用显式注册。
+- `agent-render-cmd`：增量 Markdown/ANSI 渲染；接收显式尺寸和配置，不读取应用环境或接管 CLI。
 - `agent-core/tool-macro`：核心库内部的过程宏 crate，仅负责工具属性宏的解析、校验和代码生成。Rust 要求过程宏单独编译；对外仍由 `agent-core::tool` 导出，运行时通用逻辑放在核心库。
 - 保持依赖方向：`agent-app` 使用 `agent-core`，`agent-core` 使用宏 crate；核心库不得反向依赖应用，宏 crate 不依赖核心库的运行时实现。
+- `agent/runtime` 内部按 `execution`、`coordination`、`prompt`、`tools`、`budget`、`store` 分组；领域数据结构仍放在 `agent` 下相应模块。跨组辅助接口最多开放到 `agent::runtime`，对外 API 继续由 `runtime/mod.rs` 导出。
 - 新增功能按业务职责就近放置；不得因入口方便而持续堆进 `main.rs`、`lib.rs`、`mod.rs` 或泛化的 `utils.rs`。
 - 入口文件保持薄层装配。配置解析、CLI 命令处理、内置工具增长时分别提取模块；`mod.rs` 可以保留紧密相关的接口和类型，复杂实现放入子模块。
 - Provider 的请求/响应转换、HTTP 调用、流式事件解析应具有清晰边界；扩展时可拆为 `request.rs`、`response.rs`、`stream.rs` 等。仅提取语义确实一致的共享逻辑，保留各协议差异。

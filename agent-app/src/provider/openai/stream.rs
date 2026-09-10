@@ -26,7 +26,7 @@ pub(super) fn parse_stream(
     let mut calls = BTreeMap::<usize, PartialToolCall>::new();
 
     for line in response
-        .take(super::super::continuation::MAX_RESPONSE_BYTES)
+        .take(super::super::transport::MAX_RESPONSE_BYTES)
         .lines()
     {
         let line = line.map_err(ModelError::new)?;

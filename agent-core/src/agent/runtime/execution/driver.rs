@@ -1,4 +1,4 @@
-use super::{LoopPhase, PauseReason, RunState, RunStatus, RunStore, Runtime, RuntimeError};
+use super::super::{LoopPhase, PauseReason, RunState, RunStatus, RunStore, Runtime, RuntimeError};
 use crate::{
     memory::{Memory, MemoryStore},
     model::ModelProvider,
@@ -89,7 +89,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             }
         })();
         let trace_error = result.as_ref().err().map(|error: &RuntimeError| {
-            super::super::AgentError::InvalidConfiguration(error.to_string())
+            crate::agent::AgentError::InvalidConfiguration(error.to_string())
         });
         let recorded = trace
             .finish(&mut self.trace, trace_error.as_ref())
@@ -125,7 +125,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                             .with_tag("session-summary"),
                     )
                     .map_err(RuntimeError::storage)?;
-                state.result = Some(super::super::AgentResult {
+                state.result = Some(crate::agent::AgentResult {
                     text: summary,
                     steps: state.budget.model_calls as usize,
                     session_finished: true,

@@ -1,5 +1,6 @@
-use super::super::AgentResult;
 use super::{RunBudget, RunLimits, RuntimeError};
+use crate::agent::AgentResult;
+use crate::agent::runtime::{budget, prompt};
 use crate::{
     context::Context,
     memory::Memory,
@@ -8,7 +9,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
-pub(crate) const FORMAT_VERSION: u32 = 1;
+pub(super) const FORMAT_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PauseReason {
@@ -45,55 +46,55 @@ pub enum LoopPhase {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunState {
     #[serde(default)]
-    pub(crate) prompt_history: super::prompt_history::PromptHistory,
+    pub(super) prompt_history: prompt::history::PromptHistory,
     #[serde(default)]
-    pub(crate) collaboration: super::super::collaboration::CollaborationState,
+    pub(super) collaboration: crate::agent::collaboration::CollaborationState,
     #[serde(default)]
-    pub(crate) delegations_created: usize,
+    pub(super) delegations_created: usize,
     #[serde(default)]
-    pub(crate) graph: super::super::graph::GraphState,
+    pub(super) graph: crate::agent::graph::GraphState,
     #[serde(default)]
-    pub(crate) routing: super::super::routing::RoutingState,
+    pub(super) routing: crate::agent::routing::RoutingState,
     #[serde(default)]
-    pub(crate) requested_node: Option<String>,
+    pub(super) requested_node: Option<String>,
     #[serde(default)]
-    pub(crate) last_tool_succeeded: Option<bool>,
+    pub(super) last_tool_succeeded: Option<bool>,
     #[serde(default)]
-    pub(crate) last_tool_operator: bool,
+    pub(super) last_tool_operator: bool,
     #[serde(default)]
-    pub(crate) work_revision: u64,
+    pub(super) work_revision: u64,
     #[serde(default)]
-    pub(crate) goal: String,
+    pub(super) goal: String,
     #[serde(default)]
-    pub(crate) intent: super::WorkIntent,
+    pub(super) intent: super::WorkIntent,
     #[serde(default)]
-    pub(crate) planning: bool,
+    pub(super) planning: bool,
     #[serde(default)]
-    pub(crate) plans: super::super::planning::PlanHistory,
+    pub(super) plans: crate::agent::planning::PlanHistory,
     #[serde(default)]
-    pub(crate) blackboard: super::super::blackboard::Blackboard,
-    pub(crate) format_version: u32,
-    pub(crate) revision: u64,
-    pub(crate) id: String,
-    pub(crate) session_id: String,
-    pub(crate) model_name: String,
-    pub(crate) tools: Vec<ToolDefinition>,
-    pub(crate) context: Context,
-    pub(crate) memories: Vec<Memory>,
+    pub(super) blackboard: crate::agent::blackboard::Blackboard,
+    pub(super) format_version: u32,
+    pub(super) revision: u64,
+    pub(super) id: String,
+    pub(super) session_id: String,
+    pub(super) model_name: String,
+    pub(super) tools: Vec<ToolDefinition>,
+    pub(super) context: Context,
+    pub(super) memories: Vec<Memory>,
     #[serde(default)]
-    pub(crate) memories_bounded: bool,
+    pub(super) memories_bounded: bool,
     #[serde(default)]
-    pub(crate) memories_truncated: bool,
-    pub(crate) limits: RunLimits,
-    pub(crate) budget: RunBudget,
-    pub(crate) phase: LoopPhase,
-    pub(crate) status: RunStatus,
-    pub(crate) pending: VecDeque<ToolCall>,
-    pub(crate) result: Option<AgentResult>,
+    pub(super) memories_truncated: bool,
+    pub(super) limits: RunLimits,
+    pub(super) budget: RunBudget,
+    pub(super) phase: LoopPhase,
+    pub(super) status: RunStatus,
+    pub(super) pending: VecDeque<ToolCall>,
+    pub(super) result: Option<AgentResult>,
 }
 
 impl RunState {
-    pub fn collaboration(&self) -> &super::super::collaboration::CollaborationState {
+    pub fn collaboration(&self) -> &crate::agent::collaboration::CollaborationState {
         &self.collaboration
     }
     pub fn actor(&self) -> String {
@@ -101,7 +102,7 @@ impl RunState {
             .active_node()
             .map_or_else(|| "main".into(), |id| format!("node/{id}"))
     }
-    pub(crate) fn agent_policy(&self) -> Option<&super::super::delegation::AgentPolicy> {
+    pub(super) fn agent_policy(&self) -> Option<&crate::agent::delegation::AgentPolicy> {
         self.graph
             .current()?
             .nodes
@@ -109,7 +110,7 @@ impl RunState {
             .policy
             .as_ref()
     }
-    pub(crate) fn tool_allowed(&self, name: &str) -> bool {
+    pub(super) fn tool_allowed(&self, name: &str) -> bool {
         self.tools.iter().any(|tool| {
             tool.name() == name
                 && (self.intent != super::WorkIntent::PlanOnly || tool.is_read_only())
@@ -141,10 +142,10 @@ impl RunState {
         }
         None
     }
-    pub fn graph(&self) -> &super::super::graph::GraphState {
+    pub fn graph(&self) -> &crate::agent::graph::GraphState {
         &self.graph
     }
-    pub fn routing(&self) -> &super::super::routing::RoutingState {
+    pub fn routing(&self) -> &crate::agent::routing::RoutingState {
         &self.routing
     }
     pub fn goal(&self) -> &str {
@@ -153,10 +154,10 @@ impl RunState {
     pub fn intent(&self) -> super::WorkIntent {
         self.intent
     }
-    pub fn plans(&self) -> &super::super::planning::PlanHistory {
+    pub fn plans(&self) -> &crate::agent::planning::PlanHistory {
         &self.plans
     }
-    pub fn blackboard(&self) -> &super::super::blackboard::Blackboard {
+    pub fn blackboard(&self) -> &crate::agent::blackboard::Blackboard {
         &self.blackboard
     }
     pub fn id(&self) -> &str {
@@ -193,7 +194,7 @@ impl RunState {
         self.pending.iter()
     }
 
-    pub(crate) fn validate(&self) -> Result<(), RuntimeError> {
+    pub(super) fn validate(&self) -> Result<(), RuntimeError> {
         if self.format_version != FORMAT_VERSION {
             return Err(RuntimeError::Invalid("不兼容的检查点格式版本".into()));
         }
@@ -203,14 +204,14 @@ impl RunState {
             self.budget.model_calls,
             self.phase == LoopPhase::ModelInFlight,
         )?;
-        super::step_budget::validate(self)?;
+        budget::steps::validate(self)?;
         if let Some(id) = &self.graph.active {
             if self.graph.coordinator_context.is_none()
                 || !self.graph.current().is_some_and(|graph| {
                     graph
                         .nodes
                         .get(id)
-                        .is_some_and(|node| node.status == super::super::graph::NodeStatus::Running)
+                        .is_some_and(|node| node.status == crate::agent::graph::NodeStatus::Running)
                 })
             {
                 return Err(RuntimeError::Invalid("图节点与协调者检查点不一致".into()));

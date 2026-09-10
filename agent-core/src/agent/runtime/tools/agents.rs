@@ -1,8 +1,9 @@
-use super::planning_tools::{ControlOutput, number, required};
-use super::{RunState, RuntimeError};
+use super::super::{RunState, RuntimeError};
+use super::invocation::{ControlOutput, number, required};
+use crate::agent::runtime::coordination;
 use crate::tool::{Parameter, ToolCall, ToolDefinition};
 
-pub(super) fn handles(name: &str) -> bool {
+pub(in crate::agent::runtime) fn handles(name: &str) -> bool {
     matches!(
         name,
         "runtime_delegate"
@@ -13,7 +14,7 @@ pub(super) fn handles(name: &str) -> bool {
     )
 }
 
-pub(super) fn definitions() -> Vec<ToolDefinition> {
+pub(in crate::agent::runtime) fn definitions() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition::new(
             "runtime_delegate",
@@ -50,7 +51,10 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
     ]
 }
 
-pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOutput, RuntimeError> {
+pub(in crate::agent::runtime) fn invoke(
+    state: &mut RunState,
+    call: &ToolCall,
+) -> Result<ControlOutput, RuntimeError> {
     let allowed: &[&str] = match call.name() {
         "runtime_delegate" => &["spec"],
         "runtime_agents" => &[],
@@ -72,10 +76,10 @@ pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOut
             if source.len() > 32 * 1024 {
                 return Err(RuntimeError::Invalid("委托说明过大".into()));
             }
-            let spec: super::super::delegation::AgentSpec = serde_json::from_str(source)
+            let spec: crate::agent::delegation::AgentSpec = serde_json::from_str(source)
                 .map_err(|error| RuntimeError::Invalid(error.to_string()))?;
             let id = spec.name.clone();
-            super::delegation::create(state, spec)?;
+            coordination::delegation::create(state, spec)?;
             serde_json::json!({"node":id,"address":format!("node/{id}"),"status":"queued"})
                 .to_string()
         }
@@ -88,7 +92,7 @@ pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOut
             text
         }
         "runtime_agent_budget" => {
-            super::delegation::budget(
+            coordination::delegation::budget(
                 state,
                 required(call, "node")?,
                 number(required(call, "max_steps")?)?,
@@ -97,8 +101,8 @@ pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOut
             "局部额度已调整，根额度和已消耗用量保持不变。".into()
         }
         "runtime_cancel_agent" => {
-            super::delegation::cancel(state, required(call, "node")?, false)?;
-            super::message_delivery::tick(state, super::collaboration::now_ms());
+            coordination::delegation::cancel(state, required(call, "node")?, false)?;
+            coordination::delivery::tick(state, coordination::messages::now_ms());
             "任务已取消，历史与用量保留。".into()
         }
         "runtime_result" => result(state, call)?,
@@ -132,9 +136,9 @@ fn result(state: &RunState, call: &ToolCall) -> Result<String, RuntimeError> {
         .ok_or_else(|| RuntimeError::NotFound(id.into()))?;
     if !matches!(
         node.status,
-        super::super::graph::NodeStatus::Succeeded
-            | super::super::graph::NodeStatus::Failed
-            | super::super::graph::NodeStatus::Cancelled
+        crate::agent::graph::NodeStatus::Succeeded
+            | crate::agent::graph::NodeStatus::Failed
+            | crate::agent::graph::NodeStatus::Cancelled
     ) {
         return Err(RuntimeError::Invalid("节点尚未返回最终结果".into()));
     }

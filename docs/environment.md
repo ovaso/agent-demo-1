@@ -63,7 +63,9 @@ RS_AGENT_ENV_FILE=.env.production cargo run -p agent-app
 
 ## 代码与验证
 
-文件选择、解析和覆盖规则位于 `agent-app/src/config/environment.rs`，类型转换留在 `config.rs`，CLI 只接收已解析配置。使用 `dotenvy 0.15.7` 的[迭代读取接口](https://docs.rs/dotenvy/latest/dotenvy/fn.from_read_iter.html)处理 dotenv 语法；默认 features 关闭，依赖树没有新增传递依赖，未引入配置框架。
+下列测试数量和体积数据属于原实现阶段的历史记录；当前项目已删除测试与基准程序，本轮验证见 [结构审查与重构](structure-audit-2026-09-10.md)。
+
+文件选择、解析和覆盖规则位于 `agent-app/src/config/environment.rs`，运行配置转换位于 `config/mod.rs` 和 `config/prompt.rs`，模型服务配置位于 `config/provider.rs`，CLI 只接收已解析配置。使用 `dotenvy 0.15.7` 的[迭代读取接口](https://docs.rs/dotenvy/latest/dotenvy/fn.from_read_iter.html)处理 dotenv 语法；默认 features 关闭，依赖树没有新增传递依赖，未引入配置框架。
 
 本次新增 5 项单元测试和 5 项端到端测试，覆盖引号/注释/变量引用、多行值、优先级与空值、错误脱敏、文件边界、模型/预算/路径读取、离线命令、显式文件选择及重启生效。最终通过：
 
@@ -122,3 +124,5 @@ RS_AGENT_ENV_FILE=.env.production cargo run -p agent-app
 - DeepSeek OpenAI 兼容端点使用服务端自动缓存，不添加 Anthropic cache_control。
 
 根目录 `.env.example` 提供无密钥示例。进程环境仍优先于 .env。
+
+`ANTHROPIC_MAX_TOKENS` 未设置时使用 1024；设置后必须是非零 `u32` 整数，非法值直接报错，不再静默回退。

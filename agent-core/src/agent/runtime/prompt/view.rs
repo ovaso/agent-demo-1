@@ -1,5 +1,5 @@
 //! Borrowed, role-scoped runtime data sent to the model. No prompt policy here.
-use super::{RunState, RuntimeError, WorkIntent};
+use super::super::{RunState, RuntimeError, WorkIntent};
 use crate::{
     agent::{
         delegation::AgentPolicy,
@@ -65,10 +65,10 @@ struct TokenBudgetView {
 
 #[derive(Serialize)]
 struct StepBudgetView<'a> {
-    policy: &'a super::StepExtensionPolicy,
+    policy: &'a super::super::StepExtensionPolicy,
     hard_model_calls_remaining: u64,
     extensions_remaining: usize,
-    extension_block: Option<super::StepExtensionBlock>,
+    extension_block: Option<super::super::StepExtensionBlock>,
 }
 
 #[derive(Serialize)]
@@ -82,7 +82,9 @@ struct NodeView<'a> {
     validation: Option<ValidationKind>,
 }
 
-pub(super) fn value(state: &RunState) -> Result<serde_json::Value, RuntimeError> {
+pub(in crate::agent::runtime) fn value(
+    state: &RunState,
+) -> Result<serde_json::Value, RuntimeError> {
     let active_id = state.graph.active_node();
     let active = state
         .graph

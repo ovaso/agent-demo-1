@@ -1,5 +1,5 @@
 //! Retrieved memory is bounded data in each actor's history, never a mutable system prefix.
-use super::{RunState, RuntimeError};
+use super::super::{RunState, RuntimeError};
 use crate::memory::Memory;
 use serde::Serialize;
 
@@ -15,7 +15,7 @@ struct Envelope<T> {
     records: T,
 }
 
-pub(super) fn append(state: &mut RunState) -> Result<(), RuntimeError> {
+pub(in crate::agent::runtime) fn append(state: &mut RunState) -> Result<(), RuntimeError> {
     if !state.memories_bounded {
         let selected = state
             .limits
@@ -41,7 +41,7 @@ pub(super) fn append(state: &mut RunState) -> Result<(), RuntimeError> {
         return Ok(());
     }
     let text = if state.graph.active.is_none() {
-        super::serialization::encode_prefixed(
+        super::super::serialization::encode_prefixed(
             &Envelope {
                 truncated: state.memories_truncated,
                 records: &state.memories,
@@ -51,7 +51,7 @@ pub(super) fn append(state: &mut RunState) -> Result<(), RuntimeError> {
         )?
     } else {
         let records: Vec<_> = state.memories.iter().map(reference).collect();
-        super::serialization::encode_prefixed(
+        super::super::serialization::encode_prefixed(
             &Envelope {
                 truncated: state.memories_truncated,
                 records,

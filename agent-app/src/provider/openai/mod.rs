@@ -1,14 +1,15 @@
 mod helpers;
+mod http;
 mod request;
 mod response;
 mod stream;
 mod usage;
 
-use request::{messages, tools};
 use response::parse_response;
 use stream::parse_stream;
 
-use std::io::{BufReader, Read};
+use super::transport::{self, HttpResponse};
+use std::io::BufReader;
 
 use reqwest::blocking::Client;
 use serde_json::{Value, json};
@@ -20,7 +21,7 @@ const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 /// 兼容 OpenAI Chat Completions API 的适配器。
 ///
 /// 可用于 OpenAI，也可用于采用相同请求与响应格式的模型服务。
-pub struct OpenAiCompatibleProvider {
+pub(crate) struct OpenAiCompatibleProvider {
     client: Client,
     api_key: String,
     model: String,
@@ -31,7 +32,7 @@ pub struct OpenAiCompatibleProvider {
 }
 
 impl OpenAiCompatibleProvider {
-    pub fn new(api_key: impl Into<String>, model: impl Into<String>) -> Self {
+    pub(crate) fn new(api_key: impl Into<String>, model: impl Into<String>) -> Self {
         Self {
             client: Client::new(),
             api_key: api_key.into(),
@@ -43,13 +44,13 @@ impl OpenAiCompatibleProvider {
         }
     }
 
-    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+    pub(crate) fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
         self.base_url = base_url.into().trim_end_matches('/').to_owned();
         self
     }
 
     /// 某些兼容服务不支持 stream_options，可显式关闭用量请求。
-    pub fn with_stream_usage(mut self, enabled: bool) -> Self {
+    pub(crate) fn with_stream_usage(mut self, enabled: bool) -> Self {
         self.stream_usage = enabled;
         self
     }
@@ -86,33 +87,6 @@ impl OpenAiCompatibleProvider {
     pub(crate) fn stream_usage(&self) -> bool {
         self.stream_usage
     }
-
-    fn request_body(&self, request: &ModelRequest<'_>) -> Result<Value, ModelError> {
-        super::continuation::validate(
-            request,
-            super::continuation::OPENAI,
-            &super::continuation::binding(super::continuation::OPENAI, &self.model, &self.base_url),
-        )?;
-        let mut body = json!({
-            "model": self.model,
-            "messages": messages(request.messages(), request.memories())?,
-            "tools": tools(request.tools()),
-            "tool_choice": "auto",
-        });
-        if let Some(limit) = request.max_output_tokens() {
-            let first_party = reqwest::Url::parse(&self.base_url)
-                .ok()
-                .is_some_and(|u| u.host_str() == Some("api.openai.com"));
-            let field = self.max_tokens_field.as_deref().unwrap_or(if first_party {
-                "max_completion_tokens"
-            } else {
-                "max_tokens"
-            });
-            body[field] = json!(limit);
-        }
-        super::cache::reasoning(&mut body, self.reasoning_effort.as_deref(), &self.base_url);
-        Ok(body)
-    }
 }
 
 impl ModelProvider for OpenAiCompatibleProvider {
@@ -122,21 +96,11 @@ impl ModelProvider for OpenAiCompatibleProvider {
 
     fn complete(&mut self, request: ModelRequest<'_>) -> Result<ModelResponse, ModelError> {
         let body = self.request_body(&request)?;
-        let body = super::input::encode(&body, request.max_input_bytes())?;
-        let request_bytes = body.len();
-        let response = self
-            .client
-            .post(format!("{}/chat/completions", self.base_url))
-            .bearer_auth(&self.api_key)
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .body(body)
-            .send()
-            .map_err(ModelError::new)?
-            .error_for_status()
-            .map_err(ModelError::new)?;
-        let response: Value =
-            serde_json::from_reader(response.take(super::continuation::MAX_RESPONSE_BYTES))
-                .map_err(ModelError::new)?;
+        let HttpResponse {
+            response,
+            request_bytes,
+        } = self.send(&body, request.max_input_bytes())?;
+        let response = transport::read_json(response)?;
 
         let mut parsed = parse_response(&response)?;
         parsed.bind_continuation(super::continuation::binding(
@@ -158,18 +122,10 @@ impl ModelProvider for OpenAiCompatibleProvider {
             body["stream_options"] = json!({"include_usage": true});
         }
 
-        let body = super::input::encode(&body, request.max_input_bytes())?;
-        let request_bytes = body.len();
-        let response = self
-            .client
-            .post(format!("{}/chat/completions", self.base_url))
-            .bearer_auth(&self.api_key)
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .body(body)
-            .send()
-            .map_err(ModelError::new)?
-            .error_for_status()
-            .map_err(ModelError::new)?;
+        let HttpResponse {
+            response,
+            request_bytes,
+        } = self.send(&body, request.max_input_bytes())?;
 
         let mut parsed = parse_stream(BufReader::new(response), on_text_delta)?;
         parsed.bind_continuation(super::continuation::binding(

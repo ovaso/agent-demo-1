@@ -133,6 +133,8 @@ pub(super) fn create(state: &mut RunState, spec: AgentSpec) -> Result<(), Runtim
     });
     graph.nodes.insert(spec.name, node);
     state.delegations_created += 1;
+    let sequence = state.delegations_created as u64;
+    super::step_budget::record_control(state, "delegate", &sequence.to_le_bytes());
     Ok(())
 }
 

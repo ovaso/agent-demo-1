@@ -26,6 +26,16 @@ struct Overview<'a> {
     nodes: Vec<NodeView<'a>>,
     plan: Option<&'a Plan>,
     plan_version: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    step_budget: Option<StepBudgetView<'a>>,
+}
+
+#[derive(Serialize)]
+struct StepBudgetView<'a> {
+    policy: &'a super::StepExtensionPolicy,
+    hard_model_calls_remaining: u64,
+    extensions_remaining: usize,
+    extension_block: Option<super::StepExtensionBlock>,
 }
 
 #[derive(Serialize)]
@@ -83,6 +93,20 @@ pub(super) fn message(state: &RunState) -> Result<Message, RuntimeError> {
         nodes,
         plan: active_id.is_none().then(|| state.plans.current()).flatten(),
         plan_version: state.plans.revision(),
+        step_budget: state
+            .limits
+            .step_extension
+            .as_ref()
+            .map(|policy| StepBudgetView {
+                policy,
+                hard_model_calls_remaining: policy
+                    .hard_max_steps
+                    .saturating_sub(state.budget.model_calls),
+                extensions_remaining: policy
+                    .max_extensions
+                    .saturating_sub(state.budget.step_extensions().len()),
+                extension_block: state.step_extension_block(),
+            }),
     };
     super::serialization::encode_prefixed(
         &overview,

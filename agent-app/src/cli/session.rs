@@ -152,6 +152,14 @@ impl<M: ModelProvider> Session<M> {
                 let id = self.id(id)?;
                 view::print_status(&self.runtime.set_max_steps(&id, max_steps)?);
             }
+            Command::BudgetAuto(hard_max_steps, id) => {
+                let id = self.id(id)?;
+                let policy = agent_core::agent::runtime::StepExtensionPolicy {
+                    hard_max_steps,
+                    ..self.limits.step_extension.clone().unwrap_or_default()
+                };
+                view::print_status(&self.runtime.set_step_extension_policy(&id, policy)?);
+            }
             Command::Resolve(call_id, output) => {
                 let id = self.id(None)?;
                 view::print_status(&self.runtime.resolve_tool(
@@ -241,6 +249,9 @@ impl<M: ModelProvider> Session<M> {
                 return Err(error.into());
             }
         };
+        if state.status() == &RunStatus::Completed && !state.budget().step_extensions().is_empty() {
+            view::print_budget(&state);
+        }
         if state
             .result()
             .is_some_and(|result| result.session_finished())

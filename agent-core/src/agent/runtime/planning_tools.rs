@@ -134,6 +134,7 @@ pub(super) fn invoke(
                     state.work_revision,
                 )?;
             }
+            super::step_budget::record_control(state, "plan", &revision.to_le_bytes());
             serde_json::json!({"plan_version": revision}).to_string()
         }
         "runtime_board_write" => {

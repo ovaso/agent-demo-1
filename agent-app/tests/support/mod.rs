@@ -46,7 +46,7 @@ impl Fixture {
         Self { directory }
     }
 
-    fn command(&self) -> Command {
+    pub fn command(&self) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_agent-app"));
         // The subprocess cannot inherit real API keys, proxies, or the user's database paths.
         command
@@ -58,6 +58,7 @@ impl Fixture {
             .env("RS_AGENT_TRACE_FILE", self.directory.join("trace.jsonl"))
             .env("RS_AGENT_SESSION", "e2e")
             .env("RS_AGENT_MAX_STEPS", "3")
+            .env("RS_AGENT_AUTO_EXTEND", "0")
             .current_dir(&self.directory);
         command
     }
@@ -75,10 +76,27 @@ impl Fixture {
     }
 
     pub fn run(&self, provider: Provider, input: &str, steps: &[Step]) -> CliResult {
+        self.run_with_environment(provider, input, steps, &[])
+    }
+
+    pub fn run_with_environment(
+        &self,
+        provider: Provider,
+        input: &str,
+        steps: &[Step],
+        environment: &[(&str, Option<&str>)],
+    ) -> CliResult {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let url = format!("http://{}/v1", listener.local_addr().unwrap());
         let mut command = self.command();
+        for (name, value) in environment {
+            if let Some(value) = value {
+                command.env(name, value);
+            } else {
+                command.env_remove(name);
+            }
+        }
         match provider {
             Provider::OpenAi => {
                 command

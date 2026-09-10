@@ -1,6 +1,6 @@
 //! Application environment parsing. Provider protocols and CLI rendering live elsewhere.
 use crate::provider::{AnthropicProvider, ConfiguredProvider, OpenAiCompatibleProvider};
-use agent_core::agent::runtime::RunLimits;
+use agent_core::agent::runtime::{RunLimits, StepExtensionPolicy};
 use std::{env, error::Error};
 
 pub(crate) struct RuntimeConfig {
@@ -24,12 +24,43 @@ impl RuntimeConfig {
             trace_path: trace_path(),
             session_id: session_id(),
             limits: RunLimits {
+                step_extension: step_extension_policy(max_steps)?,
                 max_delegations: env::var("RS_AGENT_MAX_DELEGATIONS")
                     .map_or(Ok(8), |value| value.parse::<usize>())?,
                 ..RunLimits::new(max_steps)
             },
         })
     }
+}
+
+fn step_extension_policy(granted: u64) -> Result<Option<StepExtensionPolicy>, Box<dyn Error>> {
+    let enabled = match env::var("RS_AGENT_AUTO_EXTEND").as_deref() {
+        Ok("0" | "false") => false,
+        Ok("1" | "true") | Err(env::VarError::NotPresent) => true,
+        _ => return Err("RS_AGENT_AUTO_EXTEND 必须为 true/false 或 1/0".into()),
+    };
+    if !enabled {
+        return Ok(None);
+    }
+    let number = |name: &str, default: u64| -> Result<u64, String> {
+        env::var(name)
+            .map_or(Ok(default), |value| value.parse::<u64>())
+            .map_err(|error| format!("{name}：{error}"))
+    };
+    let defaults = StepExtensionPolicy::default();
+    let policy = StepExtensionPolicy {
+        hard_max_steps: number(
+            "RS_AGENT_HARD_MAX_STEPS",
+            granted.max(defaults.hard_max_steps),
+        )?,
+        step_increment: number("RS_AGENT_STEP_INCREMENT", defaults.step_increment)?,
+        max_extensions: usize::try_from(number(
+            "RS_AGENT_MAX_STEP_EXTENSIONS",
+            defaults.max_extensions as u64,
+        )?)?,
+    };
+    policy.validate(granted)?;
+    Ok(Some(policy))
 }
 
 pub(crate) fn db_path() -> String {

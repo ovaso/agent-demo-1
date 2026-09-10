@@ -216,3 +216,166 @@ fn interrupted_stream(provider: Provider) {
         "once\n"
     );
 }
+
+const AUTOMATIC_BUDGET: &[(&str, Option<&str>)] = &[
+    ("RS_AGENT_AUTO_EXTEND", Some("1")),
+    ("RS_AGENT_HARD_MAX_STEPS", Some("5")),
+    ("RS_AGENT_STEP_INCREMENT", Some("2")),
+    ("RS_AGENT_MAX_STEP_EXTENSIONS", Some("1")),
+];
+
+fn reads(id: &str, path: &str) -> Step {
+    Step::tools("main", vec![call(id, "read_file", json!({"path":path}))])
+}
+
+#[test]
+fn new_cli_tasks_default_to_eight_steps_with_bounded_renewal() {
+    let fixture = Fixture::new();
+    let mut steps = Vec::new();
+    for index in 0..8 {
+        let name = format!("note-{index}.txt");
+        fs::write(fixture.directory.join(&name), &name).unwrap();
+        steps.push(reads(&format!("read-{index}"), &name));
+    }
+    steps.push(Step::text("main", "Finished default task"));
+    let result = fixture.run_with_environment(
+        Provider::OpenAi,
+        "inspect\n/exit\n",
+        &steps,
+        &[("RS_AGENT_MAX_STEPS", None), ("RS_AGENT_AUTO_EXTEND", None)],
+    );
+    let state = fixture.state();
+    assert_eq!(
+        support::http::overview(&result.requests[0])["model_calls_remaining"],
+        8
+    );
+    assert_eq!(state.limits().max_steps, 16);
+    assert_eq!(
+        state.limits().step_extension.as_ref().unwrap(),
+        &Default::default()
+    );
+    assert_eq!(state.budget().model_calls(), 9);
+    assert_eq!(state.status(), &RunStatus::Completed);
+    assert_eq!(state.budget().step_extensions().len(), 1);
+    assert_eq!(state.budget().step_extensions()[0].previous_limit, 8);
+}
+
+#[test]
+fn invalid_budget_environment_is_rejected_before_starting_the_cli() {
+    for (name, value, expected) in [
+        ("RS_AGENT_AUTO_EXTEND", "maybe", "RS_AGENT_AUTO_EXTEND"),
+        ("RS_AGENT_HARD_MAX_STEPS", "2", "硬上限"),
+        ("RS_AGENT_STEP_INCREMENT", "0", "单次增量"),
+        ("RS_AGENT_MAX_STEP_EXTENSIONS", "17", "次数"),
+    ] {
+        let fixture = Fixture::new();
+        let output = fixture
+            .command()
+            .env("OPENAI_API_KEY", "test-key")
+            .env("OPENAI_MODEL", "test-model")
+            .env("OPENAI_BASE_URL", "http://127.0.0.1:9/v1")
+            .env("RS_AGENT_AUTO_EXTEND", "1")
+            .env(name, value)
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "{name}");
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(stderr.contains(expected), "{stderr}");
+        assert!(!fixture.directory.join("runs.sqlite3").exists());
+    }
+}
+
+fn automatically_continues(provider: Provider) {
+    let fixture = Fixture::new();
+    for name in ["a.txt", "b.txt", "c.txt"] {
+        fs::write(fixture.directory.join(name), name).unwrap();
+    }
+    let result = fixture.run_with_environment(
+        provider,
+        "inspect\n/exit\n",
+        &[
+            reads("a", "a.txt"),
+            reads("b", "b.txt"),
+            reads("c", "c.txt"),
+            Step::text("main", "Inspection complete"),
+        ],
+        AUTOMATIC_BUDGET,
+    );
+    let done = fixture.state();
+    assert_eq!(done.status(), &RunStatus::Completed);
+    assert_eq!(done.budget().model_calls(), 4);
+    assert_eq!(done.budget().tool_calls(), 3);
+    assert_eq!(done.limits().max_steps, 5);
+    assert_eq!(done.budget().step_extensions().len(), 1);
+    let view = support::http::overview(&result.requests[3]);
+    assert_eq!(view["model_calls_remaining"], 2);
+    assert_eq!(view["step_budget"]["hard_model_calls_remaining"], 2);
+    assert_eq!(view["step_budget"]["extensions_remaining"], 0);
+    assert!(result.stdout.contains("3 → 5"));
+    let trace = fs::read_to_string(fixture.directory.join("trace.jsonl")).unwrap();
+    assert_eq!(trace.matches("runtime.budget.extended").count(), 1);
+}
+
+#[test]
+fn openai_cli_extends_from_fresh_results_and_completes_without_manual_resume() {
+    automatically_continues(Provider::OpenAi);
+}
+
+#[test]
+fn anthropic_cli_extends_from_fresh_results_and_completes_without_manual_resume() {
+    automatically_continues(Provider::Anthropic);
+}
+
+#[test]
+fn duplicate_results_pause_with_a_reason_and_resume_cannot_mint_budget() {
+    let fixture = Fixture::new();
+    fs::write(fixture.directory.join("same.txt"), "same content").unwrap();
+    let result = fixture.run_with_environment(
+        Provider::OpenAi,
+        "inspect\n/resume\n/exit\n",
+        &[
+            reads("a", "same.txt"),
+            reads("b", "same.txt"),
+            reads("c", "same.txt"),
+        ],
+        AUTOMATIC_BUDGET,
+    );
+    let state = fixture.state();
+    assert_eq!(state.status(), &RunStatus::Paused(PauseReason::Budget));
+    assert_eq!(state.budget().model_calls(), 3);
+    assert!(state.budget().step_extensions().is_empty());
+    assert!(result.stdout.contains("最近没有可用于续期的新进展"));
+    assert!(result.stdout.contains("进度已保存在检查点中"));
+}
+
+#[test]
+fn saved_fixed_budget_can_opt_into_renewal_after_restart() {
+    let fixture = Fixture::new();
+    for name in ["a.txt", "b.txt", "c.txt"] {
+        fs::write(fixture.directory.join(name), name).unwrap();
+    }
+    fixture.run(
+        Provider::OpenAi,
+        "inspect\n/exit\n",
+        &[
+            reads("a", "a.txt"),
+            reads("b", "b.txt"),
+            reads("c", "c.txt"),
+        ],
+    );
+    let paused = fixture.state();
+    assert!(paused.limits().step_extension.is_none());
+    assert_eq!(paused.budget().model_calls(), 3);
+    let result = fixture.run(
+        Provider::OpenAi,
+        "/budget auto 5\n/resume\n/exit\n",
+        &[Step::text("main", "Recovered inspection")],
+    );
+    assert!(result.stdout.contains("已满足续期条件，等待 /resume 恢复"));
+    let done = fixture.state();
+    assert_eq!(done.id(), paused.id());
+    assert_eq!(done.status(), &RunStatus::Completed);
+    assert_eq!(done.budget().model_calls(), 4);
+    assert_eq!(done.budget().tool_calls(), 3);
+    assert_eq!(done.budget().step_extensions().len(), 1);
+}

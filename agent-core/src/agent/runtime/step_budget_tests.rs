@@ -421,6 +421,117 @@ fn invalid_policies_are_rejected_before_creating_a_run() {
     }
 }
 
+#[test]
+fn business_errors_and_negative_outputs_do_not_earn_extensions() {
+    struct Failure(bool);
+    impl Tool for Failure {
+        fn name(&self) -> &str {
+            "probe"
+        }
+        fn description(&self) -> &str {
+            "fail"
+        }
+        fn parameters(&self) -> &[Parameter] {
+            &[]
+        }
+        fn invoke(&self, _: &Arguments) -> Result<ToolOutput, ToolError> {
+            if self.0 {
+                Err(ToolError::new("failed"))
+            } else {
+                Ok(ToolOutput::text("failed").with_success(false))
+            }
+        }
+    }
+    for error in [false, true] {
+        let mut registry = Registry::new();
+        registry.register(Failure(error)).unwrap();
+        let mut runtime = Runtime::new(
+            Model(vec![probe(0)].into()),
+            MemoryRunStore::new(),
+            Memories::default(),
+            registry,
+        );
+        runtime
+            .start("run", "session", "go", Context::new(), limits(1, 3, 1, 2))
+            .unwrap();
+        let state = runtime.resume("run", &mut |_| {}).unwrap();
+        assert_eq!(
+            state.step_extension_block(),
+            Some(StepExtensionBlock::NoRecentProgress)
+        );
+        assert_eq!(state.budget().model_calls(), 1);
+        assert!(state.budget().step_extensions().is_empty());
+    }
+}
+
+#[test]
+fn an_operator_reply_is_fresh_progress_but_duplicate_replies_are_not() {
+    let (mut runtime, _) = observed(
+        MemoryRunStore::new(),
+        vec![
+            Ok(ModelResponse::tool_calls(vec![ToolCall::new(
+                "ask",
+                "runtime_ask",
+                Arguments::new().with("to", "main").with("body", "confirm?"),
+            )])),
+            Ok(ModelResponse::tool_calls(vec![ToolCall::new(
+                "poll",
+                "runtime_agents",
+                Arguments::new(),
+            )])),
+            Ok(ModelResponse::text("worker done")),
+        ],
+    );
+    runtime
+        .start_with_options(
+            "run",
+            "session",
+            "go",
+            Context::new(),
+            RunOptions {
+                limits: limits(2, 3, 1, 1),
+                planning: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    runtime
+        .delegate(
+            "run",
+            AgentSpec {
+                name: "worker".into(),
+                instruction: "ask main".into(),
+                acceptance: vec!["report".into()],
+                tools: Some(vec![]),
+                max_steps: 2,
+                depends_on: vec![],
+            },
+        )
+        .unwrap();
+    let paused = runtime.resume("run", &mut |_| {}).unwrap();
+    assert_eq!(
+        paused.step_extension_block(),
+        Some(StepExtensionBlock::NoRecentProgress)
+    );
+    assert_eq!(paused.budget().model_calls(), 2);
+    let answered = runtime
+        .answer_request("run", "run:m1", "confirmed")
+        .unwrap();
+    assert_eq!(answered.status(), paused.status());
+    assert_eq!(answered.step_extension_block(), None);
+    let repeated = runtime
+        .answer_request("run", "run:m1", "confirmed")
+        .unwrap();
+    assert_eq!(repeated.budget(), answered.budget());
+    let resumed = runtime.resume("run", &mut |_| {}).unwrap();
+    assert_eq!(resumed.budget().model_calls(), 3);
+    assert_eq!(resumed.budget().step_extensions().len(), 1);
+    assert_eq!(
+        resumed.graph().current().unwrap().nodes["worker"].status,
+        NodeStatus::Succeeded
+    );
+}
+
 #[cfg(feature = "sqlite")]
 #[test]
 fn sqlite_reopen_after_grant_reservation_preserves_usage_and_deduplication() {

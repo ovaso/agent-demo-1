@@ -26,7 +26,8 @@ impl Default for StepExtensionPolicy {
 }
 
 impl StepExtensionPolicy {
-    pub(crate) fn validate(&self, granted: u64) -> Result<(), RuntimeError> {
+    /// Validate a policy against the currently authorized cumulative allocation.
+    pub fn validate(&self, granted: u64) -> Result<(), RuntimeError> {
         if self.hard_max_steps < granted
             || self.step_increment == 0
             || self.max_extensions == 0
@@ -131,7 +132,10 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                         .history()
                         .filter_map(|message| message.tool_calls())
                         .flatten()
-                        .find(|call| call.id() == id && !call.name().starts_with("runtime_"))
+                        .find(|call| {
+                            call.id() == id
+                                && !(state.planning && call.name().starts_with("runtime_"))
+                        })
                         .map(|call| (call.clone(), last.content().to_owned()))
                 })
             } else {
@@ -200,6 +204,12 @@ pub(super) fn record_node(state: &mut RunState, id: &str, version: u64) {
     let mut hash = fingerprint(b"node", id.as_bytes());
     add(&mut hash, &version.to_le_bytes());
     record(state, hash);
+}
+
+pub(super) fn record_control(state: &mut RunState, kind: &str, identity: &[u8]) {
+    if state.limits.step_extension.is_some() {
+        record(state, fingerprint(kind.as_bytes(), identity));
+    }
 }
 
 fn record(state: &mut RunState, hash: u64) {

@@ -205,6 +205,7 @@ pub(super) fn reply(
         declined,
     };
     message.sequence = sequence;
+    super::step_budget::record_control(state, "reply", id.as_bytes());
     Ok(())
 }
 

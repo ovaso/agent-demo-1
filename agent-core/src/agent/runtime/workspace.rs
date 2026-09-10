@@ -36,7 +36,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         if state.graph.has_open_delegations() {
             return Err(RuntimeError::Invalid("需先结算委托再修订计划".into()));
         }
-        state.plans.propose(expected_revision, plan)?;
+        let revision = state.plans.propose(expected_revision, plan)?;
         super::message_delivery::supersede(&mut state);
         if state.graph.current().is_some() {
             state.graph.bind(
@@ -45,6 +45,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 state.work_revision,
             )?;
         }
+        super::step_budget::record_control(&mut state, "plan", &revision.to_le_bytes());
         self.commit(&mut state)?;
         Ok(state)
     }

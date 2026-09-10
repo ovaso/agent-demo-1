@@ -1,5 +1,5 @@
 use crate::{config, trace_map};
-use agent_core::agent::runtime::{RunState, RunStatus};
+use agent_core::agent::runtime::{LoopPhase, PauseReason, RunState, RunStatus};
 use std::{error::Error, io};
 
 pub(super) fn print_status(state: &RunState) {
@@ -20,12 +20,71 @@ pub(super) fn print_status(state: &RunState) {
         state.limits().max_tool_calls,
         state.revision()
     );
+    print_budget(state);
     if let Some(result) = state.result() {
         println!("结果：{}", result.text());
     }
     if state.status() == &RunStatus::Paused(agent_core::agent::runtime::PauseReason::PlanReady) {
         print_plan(state);
         println!("计划已保存；/execute 开始执行，/resume 保持只规划边界。");
+    }
+    if state.status() == &RunStatus::Paused(PauseReason::Budget) {
+        let reason = if state.budget().transitions() >= state.limits().max_transitions {
+            "已达到状态转换次数上限"
+        } else if state.phase() == &LoopPhase::Tools
+            && state.budget().tool_calls() >= state.limits().max_tool_calls
+        {
+            "已达到工具调用次数上限"
+        } else if state.budget().model_calls() < state.limits().max_steps {
+            "额度已调整，等待 /resume 恢复"
+        } else {
+            state
+                .step_extension_block()
+                .map_or("已满足续期条件，等待 /resume 恢复", |reason| {
+                    reason.description()
+                })
+        };
+        println!("暂停原因：{reason}。进度已保存在检查点中，/resume 不会重置额度。");
+        if state.phase() == &LoopPhase::Model
+            && state.budget().transitions() < state.limits().max_transitions
+            && state.budget().model_calls() >= state.limits().max_steps
+            && state.step_extension_block().is_some()
+        {
+            if state.limits().step_extension.is_none() {
+                println!("可用 /budget auto <硬上限> 启用有限续期，再 /resume 继续原任务。");
+            }
+            println!(
+                "需要额外执行时，可用 /budget <更高的固定总额度> 明确授权，再 /resume；已用额度和续期历史不会清零。"
+            );
+        }
+    }
+}
+
+pub(super) fn print_budget(state: &RunState) {
+    if let Some(policy) = &state.limits().step_extension {
+        println!(
+            "预算策略：已获准 {} 步，硬上限 {} 步；自动续期 {}/{} 次，每次最多 {} 步。",
+            state.limits().max_steps,
+            policy.hard_max_steps,
+            state.budget().step_extensions().len(),
+            policy.max_extensions,
+            policy.step_increment
+        );
+    } else {
+        println!(
+            "预算策略：固定总额度 {} 步，自动续期未启用。",
+            state.limits().max_steps
+        );
+    }
+    for (index, grant) in state.budget().step_extensions().iter().enumerate() {
+        println!(
+            "预算续期 {}：{} → {}，发生于已用 {} 步时，新增进展 {} 项。",
+            index + 1,
+            grant.previous_limit,
+            grant.granted_limit,
+            grant.at_model_call,
+            grant.new_progress
+        );
     }
 }
 
@@ -125,7 +184,9 @@ pub(super) fn help() {
   /step [运行 ID]       推进一个阶段（暂停后需 /resume）
   /pause [运行 ID]      暂停待执行任务
   /cancel [运行 ID]     取消任务，保留记录
-  /budget <总步数> [ID] 明确修改模型总额度
+  /budget               查看预算、续期记录和当前状态
+  /budget auto <硬上限> [ID] 启用有限自动续期，保留用量和历史
+  /budget <总步数> [ID] 设置固定总额度并关闭自动续期
   /resolve <调用 ID> <结果>  提交已核实的工具结果
   /retry <调用 ID>      明确重试结果未知的工具
   /trace               查看调用树

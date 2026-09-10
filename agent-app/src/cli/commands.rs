@@ -26,6 +26,7 @@ pub(super) enum Command<'a> {
     Pause(Option<&'a str>),
     Cancel(Option<&'a str>),
     Budget(u64, Option<&'a str>),
+    BudgetAuto(u64, Option<&'a str>),
     Resolve(&'a str, &'a str),
     Retry(&'a str),
 }
@@ -93,7 +94,19 @@ pub(super) fn parse(input: &str) -> Result<Command<'_>, String> {
         "/pause" => Ok(Command::Pause(optional_id(rest)?)),
         "/cancel" => Ok(Command::Cancel(optional_id(rest)?)),
         "/budget" => {
+            if rest.is_empty() {
+                return Ok(Command::Status(None));
+            }
             let (value, id) = split(rest);
+            if value == "auto" {
+                let (ceiling, id) = split(id);
+                let ceiling = ceiling
+                    .parse::<u64>()
+                    .ok()
+                    .filter(|value| *value > 0)
+                    .ok_or("用法：/budget auto <正整数硬上限> [运行 ID]")?;
+                return Ok(Command::BudgetAuto(ceiling, optional_id(id)?));
+            }
             let steps = value
                 .parse::<u64>()
                 .ok()
@@ -163,6 +176,23 @@ mod tests {
             "/retry",
             "/start",
             "/help ignored",
+        ] {
+            assert!(parse(invalid).is_err(), "{invalid}");
+        }
+    }
+
+    #[test]
+    fn parses_bounded_automatic_budget_and_budget_status() {
+        assert_eq!(parse("/budget").unwrap(), Command::Status(None));
+        assert_eq!(
+            parse("/budget auto 32 run-1").unwrap(),
+            Command::BudgetAuto(32, Some("run-1"))
+        );
+        for invalid in [
+            "/budget auto",
+            "/budget auto 0",
+            "/budget auto -1",
+            "/budget auto 32 a b",
         ] {
             assert!(parse(invalid).is_err(), "{invalid}");
         }

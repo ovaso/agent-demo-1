@@ -113,6 +113,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             state.context.push_user(text);
             super::message_delivery::mark_seen(state, &inbox);
         }
+        let stop = response.stop_reason().clone();
         let (text, calls) = response.into_parts();
         let mut ids = BTreeSet::new();
         if calls.len() > state.limits.max_calls_per_response
@@ -127,6 +128,14 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 RunStatus::Paused(PauseReason::Limit("模型响应过大或工具调用 ID 无效".into()));
             self.commit(state)?;
             return Err(RuntimeError::Invalid("模型响应被拒绝，未执行工具".into()));
+        }
+        if !stop.is_complete() {
+            if let Some(text) = text {
+                state.context.push_assistant(text);
+            }
+            state.context.push_user(format!("上一轮响应未完成（{}）。恢复后只继续未完成工作，不要把截断的输出或工具调用当作已执行。", stop.description()));
+            state.status = RunStatus::Paused(PauseReason::Model(stop.description().into()));
+            return self.commit(state);
         }
         if calls.is_empty() {
             let Some(text) = text else {

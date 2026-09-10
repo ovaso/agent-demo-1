@@ -16,6 +16,7 @@ pub struct Step {
     text: String,
     calls: Vec<Value>,
     pub complete: bool,
+    stop: Option<&'static str>,
 }
 
 pub fn call(id: &str, name: &str, arguments: Value) -> Value {
@@ -29,6 +30,7 @@ impl Step {
             text: String::new(),
             calls,
             complete: true,
+            stop: None,
         }
     }
 
@@ -37,6 +39,11 @@ impl Step {
             text: text.into(),
             ..Self::tools(actor, vec![])
         }
+    }
+
+    pub fn stopped(mut self, reason: &'static str) -> Self {
+        self.stop = Some(reason);
+        self
     }
 
     pub fn interrupted(mut self) -> Self {
@@ -72,6 +79,14 @@ impl Step {
                     events.push(json!({"type":"content_block_stop","index":index}));
                 }
             }
+        }
+        if let Some(reason) = self.stop {
+            events.push(match provider {
+                Provider::OpenAi => json!({"choices":[{"delta":{},"finish_reason":reason}]}),
+                Provider::Anthropic => {
+                    json!({"type":"message_delta","delta":{"stop_reason":reason}})
+                }
+            });
         }
         let mut body: String = events
             .iter()

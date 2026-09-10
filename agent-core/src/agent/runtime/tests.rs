@@ -306,3 +306,26 @@ fn session_finish_settles_the_batch_before_replayable_memory_finalization() {
     assert_eq!(runtime.memory.list().unwrap().len(), 1);
     assert_eq!(count.load(Ordering::SeqCst), 0);
 }
+
+#[test]
+fn incomplete_custom_model_response_cannot_execute_tools() {
+    let (mut runtime, count) = runtime(
+        MemoryRunStore::new(),
+        vec![
+            Ok(batch(&["cut"]).with_stop_reason(crate::model::StopReason::Length)),
+            Ok(ModelResponse::text("continued")),
+        ],
+    );
+    start(&mut runtime, 3);
+    let state = runtime.resume("run", &mut |_| {}).unwrap();
+    assert!(matches!(
+        state.status(),
+        RunStatus::Paused(PauseReason::Model(_))
+    ));
+    assert_eq!(count.load(Ordering::SeqCst), 0);
+    assert_eq!(state.pending_tool_calls().count(), 0);
+    assert_eq!(
+        runtime.resume("run", &mut |_| {}).unwrap().status(),
+        &RunStatus::Completed
+    );
+}

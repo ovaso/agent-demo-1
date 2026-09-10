@@ -6,6 +6,8 @@ use agent_core::{
 };
 use serde_json::Value;
 pub(super) fn parse_response(response: &Value) -> Result<ModelResponse, ModelError> {
+    let stop =
+        super::super::stop_reason::anthropic(response.get("stop_reason").and_then(Value::as_str));
     let blocks = response
         .get("content")
         .and_then(Value::as_array)
@@ -20,7 +22,7 @@ pub(super) fn parse_response(response: &Value) -> Result<ModelResponse, ModelErr
                     texts.push(text);
                 }
             }
-            Some("tool_use") => {
+            Some("tool_use") if stop.is_complete() => {
                 let id = required_string(block, "id", "Anthropic 工具调用缺少 id")?;
                 let name = required_string(block, "name", "Anthropic 工具调用缺少名称")?;
                 let input = block
@@ -36,7 +38,8 @@ pub(super) fn parse_response(response: &Value) -> Result<ModelResponse, ModelErr
     let text = (!texts.is_empty()).then(|| texts.join("\n"));
     Ok(ModelResponse::tool_calls(calls)
         .with_optional_text(text)
-        .with_usage(usage::parse(response)))
+        .with_usage(usage::parse(response))
+        .with_stop_reason(stop))
 }
 
 #[cfg(test)]

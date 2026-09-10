@@ -2,6 +2,7 @@
 
 mod anthropic;
 mod openai;
+mod stop_reason;
 
 pub(crate) use anthropic::AnthropicProvider;
 pub(crate) use openai::OpenAiCompatibleProvider;

@@ -1,6 +1,8 @@
 //! 模型服务的抽象接口。
 
+mod response;
 mod usage;
+pub use response::{ModelResponse, StopReason};
 pub use usage::ModelUsage;
 
 use std::{
@@ -8,11 +10,7 @@ use std::{
     fmt::{self, Display, Formatter},
 };
 
-use super::{
-    context::Message,
-    memory::Memory,
-    tool::{ToolCall, ToolDefinition},
-};
+use super::{context::Message, memory::Memory, tool::ToolDefinition};
 
 /// 一次发送给模型服务的完整请求。
 #[derive(Debug)]
@@ -45,61 +43,6 @@ impl<'a> ModelRequest<'a> {
 
     pub fn tools(&self) -> &[ToolDefinition] {
         self.tools
-    }
-}
-
-/// 模型的一轮响应。
-#[derive(Debug, Clone)]
-pub struct ModelResponse {
-    text: Option<String>,
-    tool_calls: Vec<ToolCall>,
-    usage: ModelUsage,
-}
-
-impl ModelResponse {
-    pub fn text(text: impl Into<String>) -> Self {
-        Self {
-            text: Some(text.into()),
-            tool_calls: Vec::new(),
-            usage: ModelUsage::default(),
-        }
-    }
-
-    pub fn tool_calls(tool_calls: Vec<ToolCall>) -> Self {
-        Self {
-            text: None,
-            tool_calls,
-            usage: ModelUsage::default(),
-        }
-    }
-
-    pub fn with_text(mut self, text: impl Into<String>) -> Self {
-        self.text = Some(text.into());
-        self
-    }
-
-    pub fn with_optional_text(self, text: Option<String>) -> Self {
-        match text {
-            Some(text) => self.with_text(text),
-            None => self,
-        }
-    }
-
-    pub fn text_content(&self) -> Option<&str> {
-        self.text.as_deref()
-    }
-
-    pub fn with_usage(mut self, usage: ModelUsage) -> Self {
-        self.usage = usage;
-        self
-    }
-
-    pub fn usage(&self) -> ModelUsage {
-        self.usage
-    }
-
-    pub fn into_parts(self) -> (Option<String>, Vec<ToolCall>) {
-        (self.text, self.tool_calls)
     }
 }
 

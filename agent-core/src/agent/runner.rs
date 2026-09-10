@@ -129,6 +129,13 @@ where
                 .as_deref_mut()
                 .map(|callback| callback as &mut dyn FnMut(&str)),
         )?;
+        if !response.stop_reason().is_complete() {
+            if let Some(text) = response.text_content() {
+                context.push_assistant(text);
+            }
+            agent.context_store.save(session_id, &context)?;
+            return Err(crate::model::ModelError::new(response.stop_reason().description()).into());
+        }
         let (text, calls) = response.into_parts();
 
         if calls.is_empty() {

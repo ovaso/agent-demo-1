@@ -20,6 +20,7 @@ pub(super) fn parse_stream(
     let mut text = String::new();
     let mut usage = usage::Usage::default();
     let mut finished = false;
+    let mut stop = agent_core::model::StopReason::Complete;
     let mut calls = BTreeMap::<usize, PartialToolCall>::new();
 
     for line in response.lines() {
@@ -37,6 +38,12 @@ pub(super) fn parse_stream(
             return Err(ModelError::new(error));
         }
         usage.update(&chunk);
+        if let Some(reason) = chunk
+            .pointer("/choices/0/finish_reason")
+            .and_then(Value::as_str)
+        {
+            stop = super::super::stop_reason::openai(Some(reason));
+        }
         let Some(delta) = chunk.pointer("/choices/0/delta") else {
             continue;
         };
@@ -71,6 +78,9 @@ pub(super) fn parse_stream(
     if !finished {
         return Err(ModelError::new("openai 流在结束标记之前中断"));
     }
+    if !stop.is_complete() {
+        calls.clear();
+    }
     let calls = calls
         .into_values()
         .map(|call| {
@@ -85,7 +95,9 @@ pub(super) fn parse_stream(
         })
         .collect::<Result<Vec<_>, ModelError>>()?;
 
-    let response = ModelResponse::tool_calls(calls).with_usage(usage.finish());
+    let response = ModelResponse::tool_calls(calls)
+        .with_usage(usage.finish())
+        .with_stop_reason(stop);
     if text.is_empty() {
         Ok(response)
     } else {

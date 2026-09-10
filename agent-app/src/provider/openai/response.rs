@@ -6,6 +6,11 @@ use agent_core::{
 };
 use serde_json::Value;
 pub(super) fn parse_response(response: &Value) -> Result<ModelResponse, ModelError> {
+    let stop = super::super::stop_reason::openai(
+        response
+            .pointer("/choices/0/finish_reason")
+            .and_then(Value::as_str),
+    );
     let message = response
         .pointer("/choices/0/message")
         .ok_or_else(|| ModelError::new("OpenAI 响应缺少 choices[0].message"))?;
@@ -17,6 +22,7 @@ pub(super) fn parse_response(response: &Value) -> Result<ModelResponse, ModelErr
     let calls = message
         .get("tool_calls")
         .and_then(Value::as_array)
+        .filter(|_| stop.is_complete())
         .map(|calls| {
             calls
                 .iter()
@@ -45,7 +51,8 @@ pub(super) fn parse_response(response: &Value) -> Result<ModelResponse, ModelErr
 
     Ok(ModelResponse::tool_calls(calls)
         .with_optional_text(text)
-        .with_usage(usage::parse(response)))
+        .with_usage(usage::parse(response))
+        .with_stop_reason(stop))
 }
 
 #[cfg(test)]

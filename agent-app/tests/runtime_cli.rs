@@ -1,5 +1,7 @@
 #[path = "runtime_cli/env_file.rs"]
 mod env_file;
+#[path = "runtime_cli/model_limits.rs"]
+mod model_limits;
 mod support;
 
 use agent_core::agent::{

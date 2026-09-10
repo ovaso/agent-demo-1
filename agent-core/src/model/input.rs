@@ -91,3 +91,7 @@ impl ModelRequest<'_> {
         })
     }
 }
+
+pub(crate) fn encoded_size(value: &impl Serialize) -> Result<usize, ModelError> {
+    Ok(digest(value)?.bytes)
+}

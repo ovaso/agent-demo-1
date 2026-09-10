@@ -60,7 +60,7 @@ pub(super) fn append(state: &mut RunState) -> Result<(), RuntimeError> {
             state.limits.max_context_bytes,
         )?
     };
-    state.context.push_user(text);
+    state.context.push_observation(text);
     Ok(())
 }
 fn reference(memory: &Memory) -> References<'_> {

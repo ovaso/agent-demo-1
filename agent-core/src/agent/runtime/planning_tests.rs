@@ -110,7 +110,7 @@ fn planning_context_exposes_only_read_capabilities_and_persists_one_goal() {
             RunOptions::plan_only(RunLimits::new(1)),
         )
         .unwrap();
-    let (messages, tools, _) = super::model_input::prepare(&mut state).unwrap();
+    let (messages, tools, _, _) = super::model_input::prepare(&mut state).unwrap();
     assert!(!tools.iter().any(|tool| tool.name() == "count"));
     assert!(tools.iter().any(|tool| tool.name() == "runtime_plan"));
     assert_eq!(messages.len(), state.context().len() + 1);

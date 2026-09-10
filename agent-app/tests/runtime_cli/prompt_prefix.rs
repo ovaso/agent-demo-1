@@ -79,3 +79,50 @@ fn new_memory_matches_append_without_rewriting_the_previous_question() {
         );
     }
 }
+
+#[test]
+fn long_context_compacts_in_batches_and_preserves_user_constraints() {
+    let fixture = Fixture::new();
+    std::fs::write(fixture.directory.join("a.txt"), "evidence ".repeat(228)).unwrap();
+    let goal = "只读调查，绝对不要修改文件。";
+    let mut steps = Vec::new();
+    for i in 0..8 {
+        steps.push(Step::tools(
+            "main",
+            vec![call(&format!("r{i}"), "read_file", json!({"path":"a.txt"}))],
+        ));
+    }
+    steps.push(Step::text("main", "done"));
+    let result = fixture.run_with_environment(
+        Provider::OpenAi,
+        &format!("{goal}\n/exit\n"),
+        &steps,
+        &[
+            ("RS_AGENT_MAX_STEPS", Some("12")),
+            ("RS_AGENT_CONTEXT_HIGH_BYTES", Some("8000")),
+            ("RS_AGENT_CONTEXT_LOW_BYTES", Some("4000")),
+            ("RS_AGENT_SUMMARY_MAX_BYTES", Some("512")),
+        ],
+    );
+    assert!(
+        result
+            .requests
+            .iter()
+            .any(|r| r["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|m| m["content"]
+                    .as_str()
+                    .is_some_and(|s| s.starts_with("历史压缩摘录"))))
+    );
+    for request in result.requests {
+        assert!(
+            request["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|m| m["role"] == "user" && m["content"] == goal)
+        );
+    }
+}

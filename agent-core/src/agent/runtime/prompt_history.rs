@@ -43,7 +43,7 @@ pub(super) fn append(state: &mut RunState) -> Result<Option<Change>, RuntimeErro
     if !state.planning && state.graph.current().is_none() {
         return Ok(None);
     }
-    if state.context.history_limit() < 2 {
+    if state.limits.context_window.is_none() && state.context.history_limit() < 2 {
         return Err(RuntimeError::Invalid(
             "规划上下文至少需要保留两条历史消息".into(),
         ));
@@ -84,13 +84,13 @@ pub(super) fn append(state: &mut RunState) -> Result<Option<Change>, RuntimeErro
     let prefix = if full { SNAPSHOT_PREFIX } else { DELTA_PREFIX };
     let message =
         super::serialization::encode_prefixed(&patch, prefix, state.limits.max_context_bytes)?;
-    state.context.push_user(message);
+    state.context.push_observation(message);
     // Appending the delta itself can cross the count boundary. Establish a new
     // complete view in the same request if that removed its supporting history.
     if !full && state.context.generation() != generation {
         state
             .context
-            .push_user(super::serialization::encode_prefixed(
+            .push_observation(super::serialization::encode_prefixed(
                 &next,
                 SNAPSHOT_PREFIX,
                 state.limits.max_context_bytes,

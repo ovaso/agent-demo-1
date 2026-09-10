@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 
 use super::{model::ModelContinuation, tool::ToolCall};
 
+mod compaction;
 mod memory;
+pub use compaction::{CompactionInfo, ContextWindow};
 #[cfg(test)]
 mod protocol_tests;
 mod store;
@@ -40,6 +42,8 @@ pub enum Message {
     },
     User {
         content: String,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        rebuildable: bool,
     },
     Assistant {
         content: String,
@@ -66,7 +70,34 @@ impl Message {
     pub fn user(content: impl Into<String>) -> Self {
         Self::User {
             content: content.into(),
+            rebuildable: false,
         }
+    }
+
+    /// Runtime-generated data that can be reconstructed after compaction.
+    pub fn observation(content: impl Into<String>) -> Self {
+        Self::User {
+            content: content.into(),
+            rebuildable: true,
+        }
+    }
+    pub fn is_instruction(&self) -> bool {
+        matches!(
+            self,
+            Self::User {
+                rebuildable: false,
+                ..
+            }
+        )
+    }
+    pub fn is_observation(&self) -> bool {
+        matches!(
+            self,
+            Self::User {
+                rebuildable: true,
+                ..
+            }
+        )
     }
 
     pub fn assistant(content: impl Into<String>) -> Self {
@@ -131,7 +162,7 @@ impl Message {
     pub fn content(&self) -> &str {
         match self {
             Self::System { content }
-            | Self::User { content }
+            | Self::User { content, .. }
             | Self::Assistant { content, .. }
             | Self::Tool { content, .. } => content,
         }
@@ -169,9 +200,13 @@ impl Message {
 pub struct Context {
     system: Option<Message>,
     history: VecDeque<Message>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    summary: Option<Message>,
     history_limit: usize,
     #[serde(default)]
     generation: u64,
+    #[serde(default)]
+    defer_trimming: bool,
 }
 
 impl Default for Context {
@@ -189,8 +224,10 @@ impl Context {
         Self {
             system: None,
             history: VecDeque::new(),
+            summary: None,
             history_limit,
             generation: 0,
+            defer_trimming: false,
         }
     }
 
@@ -223,6 +260,10 @@ impl Context {
         self.push(Message::user(content));
     }
 
+    pub fn push_observation(&mut self, content: impl Into<String>) {
+        self.push(Message::observation(content));
+    }
+
     pub fn push_assistant(&mut self, content: impl Into<String>) {
         self.push(Message::assistant(content));
     }
@@ -250,6 +291,13 @@ impl Context {
         self.trim_history();
     }
 
+    pub(crate) fn defer_trimming(&mut self, deferred: bool) {
+        self.defer_trimming = deferred;
+        if !deferred {
+            self.trim_history();
+        }
+    }
+
     pub(crate) fn generation(&self) -> u64 {
         self.generation
     }
@@ -260,11 +308,14 @@ impl Context {
 
     /// 遍历完整模型上下文，system prompt 始终位于第一条。
     pub fn messages(&self) -> impl Iterator<Item = &Message> {
-        self.system.iter().chain(self.history.iter())
+        self.system
+            .iter()
+            .chain(self.summary.iter())
+            .chain(self.history.iter())
     }
 
     pub fn history(&self) -> impl Iterator<Item = &Message> {
-        self.history.iter()
+        self.summary.iter().chain(self.history.iter())
     }
 
     /// 生成独立持有的消息列表，可用于模型请求、队列或缓存。
@@ -273,24 +324,33 @@ impl Context {
     }
 
     pub fn last(&self) -> Option<&Message> {
-        self.history.back().or(self.system.as_ref())
+        self.history
+            .back()
+            .or(self.summary.as_ref())
+            .or(self.system.as_ref())
     }
 
     pub fn len(&self) -> usize {
-        self.history.len() + usize::from(self.system.is_some())
+        self.history.len()
+            + usize::from(self.system.is_some())
+            + usize::from(self.summary.is_some())
     }
 
     pub fn is_empty(&self) -> bool {
-        self.system.is_none() && self.history.is_empty()
+        self.system.is_none() && self.summary.is_none() && self.history.is_empty()
     }
 
     /// 清除 user、assistant 与 tool 消息，但保留 system prompt。
     pub fn clear_history(&mut self) {
         self.history.clear();
+        self.summary = None;
         self.generation = self.generation.wrapping_add(1);
     }
 
     fn trim_history(&mut self) {
+        if self.defer_trimming {
+            return;
+        }
         while self.history.len() > self.history_limit {
             let remove = match self.history.front() {
                 Some(Message::Assistant { tool_calls, .. }) if !tool_calls.is_empty() => {

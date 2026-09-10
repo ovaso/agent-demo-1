@@ -33,6 +33,7 @@ impl RuntimeConfig {
             limits: RunLimits {
                 step_extension: step_extension_policy(environment, max_steps)?,
                 memory_limits: prompt::memory_limits(environment)?,
+                context_window: prompt::context_window(environment)?,
                 max_context_bytes: prompt::number(
                     environment,
                     "RS_AGENT_MAX_CONTEXT_BYTES",

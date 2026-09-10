@@ -79,3 +79,16 @@ RS_AGENT_ENV_FILE=.env.production cargo run -p agent-app
 
 运行时将记忆总量进一步限制在上下文字节上限的一半内，保留任务与工具空间。
 旧任务恢复时也会限制旧记忆；配置值随任务检查点保存，不由后续进程环境悄悄覆盖。
+
+## 上下文批量压缩
+
+| 变量 | 默认值 | 用途 |
+|---|---:|---|
+| `RS_AGENT_CONTEXT_COMPACTION` | `1` | 启用模型调用边界的批量压缩；0 使用原数量窗口 |
+| `RS_AGENT_CONTEXT_HIGH_BYTES` | `262144` | 逻辑会话 JSON 高水位，默认不超过硬上限的 3/4 |
+| `RS_AGENT_CONTEXT_LOW_BYTES` | 高水位的 1/2 | 保留近期内容的字节目标 |
+| `RS_AGENT_HISTORY_MAX_MESSAGES` | `512` | 数量高水位，至少 4；一次压缩保留近期约一半消息 |
+| `RS_AGENT_SUMMARY_MAX_BYTES` | `8192` | 原文摘录字节上限，默认不超过低水位的 1/4 |
+
+有效范围：256 <= 摘录上限 < 低水位 < 高水位 <= RS_AGENT_MAX_CONTEXT_BYTES。
+会话水位与实际传输 JSON 大小口径不同；发送前仍校验完整 Provider 请求硬上限。

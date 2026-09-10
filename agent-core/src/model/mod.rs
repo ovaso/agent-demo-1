@@ -3,6 +3,7 @@
 mod continuation;
 mod input;
 mod response;
+pub(crate) use input::encoded_size;
 pub use input::{InputDiagnostics, InputDigest};
 mod usage;
 pub use continuation::ModelContinuation;

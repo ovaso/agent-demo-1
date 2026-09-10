@@ -14,7 +14,9 @@ pub(super) fn messages(
     for message in messages {
         match message {
             Message::System { content } => system_parts.push(content.clone()),
-            Message::User { content } => output.push(json!({"role": "user", "content": content})),
+            Message::User { content, .. } => {
+                output.push(json!({"role": "user", "content": content}))
+            }
             Message::Assistant {
                 content: assistant_text,
                 tool_calls,

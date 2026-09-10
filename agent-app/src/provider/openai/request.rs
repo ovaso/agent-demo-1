@@ -24,7 +24,9 @@ pub(super) fn messages(
             Message::System { content } => {
                 output.push(json!({"role": "system", "content": content}))
             }
-            Message::User { content } => output.push(json!({"role": "user", "content": content})),
+            Message::User { content, .. } => {
+                output.push(json!({"role": "user", "content": content}))
+            }
             Message::Assistant {
                 content,
                 tool_calls,

@@ -65,6 +65,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         if self.store.load(id)?.is_some() {
             return Err(RuntimeError::Conflict);
         }
+        context.defer_trimming(limits.context_window.is_some());
         context.push_user(input);
         super::serialization::check(&context, limits.max_context_bytes)?;
         let memories = self

@@ -9,10 +9,22 @@ type Prepared = (
     Vec<Message>,
     Vec<ToolDefinition>,
     Option<prompt_history::Change>,
+    Option<crate::context::CompactionInfo>,
 );
 
 pub(super) fn prepare(state: &mut RunState) -> Result<Prepared, RuntimeError> {
     validate_protocol(&state.context)?;
+    state
+        .context
+        .defer_trimming(state.limits.context_window.is_some());
+    let compacted = if let Some(window) = state.limits.context_window {
+        state
+            .context
+            .compact(window)
+            .map_err(|e| RuntimeError::Invalid(e.to_string()))?
+    } else {
+        None
+    };
     super::memory_input::append(state)?;
     let inbox = super::message_delivery::inbox(state, 0, true);
     if !inbox.is_empty() {
@@ -27,7 +39,7 @@ pub(super) fn prepare(state: &mut RunState) -> Result<Prepared, RuntimeError> {
     validate_protocol(&state.context)?;
     super::serialization::check(&state.context, state.limits.max_context_bytes)?;
     let (messages, tools) = super::planning_prompt::request_context(state)?;
-    Ok((messages, tools, change))
+    Ok((messages, tools, change, compacted))
 }
 
 /// 模型请求前验证调用与结果成组闭合，防止旧数据或手工上下文破坏协议。

@@ -48,7 +48,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             )?;
             return self.commit(state);
         }
-        let (messages, tools, change) = match super::model_input::prepare(state) {
+        let (messages, tools, change, compacted) = match super::model_input::prepare(state) {
             Ok(prepared) => prepared,
             Err(error) => {
                 state.status = RunStatus::Paused(PauseReason::Limit(error.to_string()));
@@ -56,6 +56,16 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 return Err(error);
             }
         };
+        if let Some(compacted) = compacted {
+            trace
+                .record(
+                    &mut self.trace,
+                    crate::trace::TraceEvent::new("runtime.context.compacted")
+                        .with_field("actor", state.actor())
+                        .with_field("details", serde_json::json!(compacted)),
+                )
+                .map_err(RuntimeError::storage)?;
+        }
         if let Some(change) = change {
             trace
                 .record(

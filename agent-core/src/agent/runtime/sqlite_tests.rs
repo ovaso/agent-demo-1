@@ -137,6 +137,30 @@ fn reopening_inflight_tool_requires_resolution_before_dispatch() {
 }
 
 #[test]
+fn oversized_encoding_leaves_checkpoint_and_projection_unchanged() {
+    let db = Database::new();
+    let (mut runtime, _) = runtime(db.open(), vec![]);
+    let original = runtime
+        .start("run", "session", "go", Context::new(), RunLimits::new(2))
+        .unwrap();
+    let mut oversized = original.clone();
+    oversized.revision = 1;
+    oversized.limits.max_checkpoint_bytes = serde_json::to_vec(&original).unwrap().len() + 128;
+    oversized.context.push_user("large\n\"中文".repeat(512));
+    assert!(runtime.store.save(&oversized, 0).is_err());
+    assert_eq!(runtime.state("run").unwrap(), original);
+    assert_eq!(
+        runtime.store.session_context("session").unwrap().as_ref(),
+        Some(original.context())
+    );
+
+    let paused = runtime.pause("run").unwrap();
+    assert_eq!(paused.revision(), 1);
+    drop(runtime);
+    assert_eq!(db.open().load("run").unwrap().unwrap(), paused);
+}
+
+#[test]
 fn plans_and_blackboard_survive_reopen_and_conflicts_do_not_change_the_checkpoint() {
     use crate::agent::{
         blackboard::{BoardUpdate, EntryKind},

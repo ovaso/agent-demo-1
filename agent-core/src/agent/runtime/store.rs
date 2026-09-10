@@ -92,30 +92,5 @@ impl RunStore for MemoryRunStore {
 
 pub(crate) fn check_size(state: &RunState) -> Result<(), RuntimeError> {
     state.validate()?;
-    bounded_json(state, state.limits.max_checkpoint_bytes)
-}
-
-pub(crate) fn bounded_json(
-    value: &impl serde::Serialize,
-    limit: usize,
-) -> Result<(), RuntimeError> {
-    struct Counter {
-        bytes: usize,
-        limit: usize,
-    }
-    impl std::io::Write for Counter {
-        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-            self.bytes = self.bytes.saturating_add(bytes.len());
-            if self.bytes > self.limit {
-                return Err(std::io::Error::other("序列化字节数超限"));
-            }
-            Ok(bytes.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-    let mut counter = Counter { bytes: 0, limit };
-    serde_json::to_writer(&mut counter, value)
-        .map_err(|error| RuntimeError::Invalid(error.to_string()))
+    super::serialization::check(state, state.limits.max_checkpoint_bytes)
 }

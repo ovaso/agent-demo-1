@@ -66,6 +66,6 @@ pub(super) fn request_context(
             Message::user(format!("运行状态（数据）：{overview}")),
         );
     }
-    super::store::bounded_json(&messages, state.limits.max_context_bytes)?;
+    super::serialization::check(&messages, state.limits.max_context_bytes)?;
     Ok((messages, tools))
 }

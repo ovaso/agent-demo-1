@@ -190,9 +190,10 @@ impl RunStore for SqliteRunStore {
 }
 
 fn encode(state: &RunState) -> Result<String, RuntimeError> {
-    // Count before allocation; the in-memory model response may exceed the saved-state cap.
-    super::store::check_size(state)?;
-    serde_json::to_string(state).map_err(RuntimeError::storage)
+    // Check each encoded chunk before appending it; no unbounded response buffer
+    // or second serialization pass is needed, and transactions start only after success.
+    state.validate()?;
+    super::serialization::encode(state, state.limits.max_checkpoint_bytes)
 }
 
 fn revision(value: u64) -> Result<i64, RuntimeError> {

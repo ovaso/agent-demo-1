@@ -42,7 +42,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             )
         });
         if let Err(error) = validate_protocol(&state.context).and_then(|()| {
-            super::store::bounded_json(&state.context, state.limits.max_context_bytes)
+            super::serialization::check(&state.context, state.limits.max_context_bytes)
         }) {
             state.status = RunStatus::Paused(PauseReason::Limit(error.to_string()));
             self.commit(state)?;
@@ -58,7 +58,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         };
         if let Some(text) = &incoming_text {
             messages.push(Message::user(text));
-            super::store::bounded_json(&messages, state.limits.max_context_bytes)?;
+            super::serialization::check(&messages, state.limits.max_context_bytes)?;
         }
         state.budget.model_calls += 1;
         if let Some(id) = state.graph.active.clone()

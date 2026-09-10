@@ -66,7 +66,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             return Err(RuntimeError::Conflict);
         }
         context.push_user(input);
-        super::store::bounded_json(&context, limits.max_context_bytes)?;
+        super::serialization::check(&context, limits.max_context_bytes)?;
         let state = RunState {
             collaboration: Default::default(),
             delegations_created: 0,

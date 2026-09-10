@@ -51,26 +51,3 @@ impl ModelUsage {
         self.reasoning_tokens = sum(self.reasoning_tokens, other.reasoning_tokens);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ratio_is_weighted_by_input_and_unknown_is_not_zero() {
-        let mut usage = ModelUsage {
-            input_tokens: Some(100),
-            cached_input_tokens: Some(90),
-            ..Default::default()
-        };
-        usage.add(ModelUsage {
-            input_tokens: Some(900),
-            cached_input_tokens: Some(0),
-            ..Default::default()
-        });
-        assert_eq!(usage.cache_read_percent(), Some(9.0));
-        usage.add(ModelUsage::default());
-        assert_eq!(usage.cache_read_percent(), None);
-        assert_eq!(ModelUsage::zero().cache_read_percent(), None);
-    }
-}

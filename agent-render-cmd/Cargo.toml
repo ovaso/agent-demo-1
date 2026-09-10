@@ -17,6 +17,3 @@ unicode-width = { version = "0.2", default-features = false }
 default = []
 syntax-highlighting = ["dep:syntect"]
 math = ["dep:pulldown-latex", "dep:rust-latex-parser", "dep:term-maths"]
-
-[dev-dependencies]
-vt100 = { version = "0.16", default-features = false }

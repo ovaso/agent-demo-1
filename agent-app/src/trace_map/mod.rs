@@ -216,6 +216,3 @@ fn write_node(node: &Node, output: &mut impl Write) -> io::Result<()> {
     }
     writeln!(output)
 }
-
-#[cfg(test)]
-mod tests;

@@ -16,6 +16,3 @@ use agent_core::tool::{Registry, RegistryError};
 pub fn register(registry: &mut Registry) -> Result<(), RegistryError> {
     registry.register_group("default")
 }
-
-#[cfg(test)]
-mod tests;

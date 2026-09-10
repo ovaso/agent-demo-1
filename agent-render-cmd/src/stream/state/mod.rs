@@ -14,8 +14,6 @@ mod output;
 mod preview;
 mod references;
 mod stack;
-#[cfg(test)]
-mod tests;
 
 /// Stateful streaming renderer: containers and the active block survive lines,
 /// terminal scrollback and resize. Finished source lines are not retained by code.

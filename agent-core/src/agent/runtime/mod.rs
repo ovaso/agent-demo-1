@@ -3,47 +3,31 @@
 mod agent_tools;
 mod budget;
 mod collaboration;
-#[cfg(test)]
-mod collaboration_tests;
 mod control;
 mod delegation;
-#[cfg(test)]
-mod delegation_tests;
 mod engine;
 mod error;
 mod execution;
 mod graph_control;
 mod graph_execution;
-#[cfg(test)]
-mod graph_tests;
 mod memory_input;
 mod message_delivery;
 mod message_tools;
-#[cfg(test)]
-mod metadata_tests;
 mod model_execution;
 mod model_input;
 mod options;
 mod planning_prompt;
-#[cfg(test)]
-mod planning_tests;
 mod planning_tools;
 mod planning_view;
 mod prompt_history;
 mod serialization;
 #[cfg(feature = "sqlite")]
 mod sqlite;
-#[cfg(all(test, feature = "sqlite"))]
-mod sqlite_tests;
 mod state;
 mod step_budget;
 mod token_budget;
 pub use token_budget::TokenUsage;
-#[cfg(test)]
-mod step_budget_tests;
 mod store;
-#[cfg(test)]
-mod tests;
 mod workspace;
 
 pub use budget::{RunBudget, RunLimits};

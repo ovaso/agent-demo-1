@@ -160,16 +160,6 @@ pub(super) fn value(state: &RunState) -> Result<serde_json::Value, RuntimeError>
     serde_json::to_value(overview).map_err(RuntimeError::storage)
 }
 
-#[cfg(test)]
-pub(super) fn message(state: &RunState) -> Result<crate::context::Message, RuntimeError> {
-    super::serialization::encode_prefixed(
-        &value(state)?,
-        super::prompt_history::SNAPSHOT_PREFIX,
-        state.limits.max_context_bytes,
-    )
-    .map(crate::context::Message::user)
-}
-
 fn preview(text: &str) -> &str {
     let mut end = text.len().min(512);
     while !text.is_char_boundary(end) {

@@ -9,7 +9,7 @@
 
 - `agent-core`：可复用的 Agent 执行逻辑与抽象。`agent/` 负责执行流程，`model/` 负责模型接口，`context/` 负责会话上下文，`memory/` 负责长期记忆，`tool/` 负责工具定义与注册，`trace/` 负责追踪。
 - `agent-app`：应用装配、配置、CLI 交互和具体模型服务适配。环境变量、终端输出、HTTP 协议细节放在这里，不下沉到 `agent-core`。
-- `agent-tool-macro`：仅负责工具属性宏的解析、校验和代码生成；运行时通用逻辑放在 `agent-core`，避免为每个工具重复生成大段实现。
+- `agent-core/tool-macro`：核心库内部的过程宏 crate，仅负责工具属性宏的解析、校验和代码生成。Rust 要求过程宏单独编译；对外仍由 `agent-core::tool` 导出，运行时通用逻辑放在核心库。
 - 保持依赖方向：`agent-app` 使用 `agent-core`，`agent-core` 使用宏 crate；核心库不得反向依赖应用，宏 crate 不依赖核心库的运行时实现。
 - 新增功能按业务职责就近放置；不得因入口方便而持续堆进 `main.rs`、`lib.rs`、`mod.rs` 或泛化的 `utils.rs`。
 - 入口文件保持薄层装配。配置解析、CLI 命令处理、内置工具增长时分别提取模块；`mod.rs` 可以保留紧密相关的接口和类型，复杂实现放入子模块。
@@ -34,7 +34,7 @@
 - 新增依赖前先检查标准库和现有依赖能否满足需求；采用新依赖时说明用途，检查传递依赖及启用的 features，避免为少量功能引入整套框架。
 - 依赖只启用实际需要的 features；在可行时关闭默认 features。保持 `agent-core` 的 SQLite 可选能力，新增可选后端也应可通过 feature 排除。
 - 当前应用使用 SQLite；不能为了缩小产物直接移除其功能或将 bundled SQLite 改为系统链接而不评估部署影响。
-- 测试与基准专用依赖放入 `dev-dependencies`。区分宏的编译期依赖与生成的运行时代码，不能仅凭依赖数量判断最终产物体积。
+- 区分宏的编译期依赖与生成的运行时代码，不能仅凭依赖数量判断最终产物体积。当前不维护测试或基准专用依赖。
 - 保留根 `Cargo.toml` 的 release 配置作为基线。修改 `opt-level`、LTO、codegen-units、panic 或 strip 设置时，比较实际运行表现和产物大小；不凭配置名称认定结果更快或更小。
 - 涉及依赖、features、宏展开、大量泛型实例化或编译参数的变更，执行 release 构建并记录主可执行文件的字节数和相对基线的变化。
 - 体积比较必须使用相同工具链、target、features 和构建命令，测量最终可执行文件或交付包，不使用整个 `target/` 目录大小代替。不能通过删除必要功能、错误处理或改变部署要求制造体积收益。
@@ -42,8 +42,9 @@
 
 ## 验证与交付
 
-- Rust 代码修改后执行 `cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings` 和 `cargo test --workspace`；说明未能执行的检查及原因。
-- 涉及核心库可选能力或依赖配置时，额外执行 `cargo test -p agent-core --no-default-features`，避免 workspace 中的 feature 合并掩盖问题。
+- 按用户要求，项目不保留自动化测试、测试夹具或基准测试程序；未经用户重新要求，不新增这些内容，不执行 `cargo test`。
+- Rust 代码修改后执行 `cargo fmt --all -- --check`，并对受影响的 crate 执行 `cargo check -p <crate>`；跨 crate 修改时使用 `cargo check --workspace`。不默认叠加全量 Clippy 或重复检查；有具体问题时再增加必要检查。
+- 涉及核心库可选能力或依赖配置时，额外执行 `cargo check -p agent-core --no-default-features`，避免 workspace 中的 feature 合并掩盖问题。
 - 涉及发布体积时使用 `cargo build --release -p agent-app --locked`；依赖变更应同步维护 `Cargo.lock`。
-- 行为变更补充针对性的测试；结构重构保持现有行为。仅修改文档时检查内容、路径和命令即可，无需运行 Rust 测试。
+- 结构重构保持现有行为。按实际改动选择必要的编译检查或人工验证，不扩展无关验证范围；仅修改文档时检查内容、路径和命令即可。
 - 交付时简要说明代码放置理由、验证结果，以及实际测得的性能或体积变化；未测量时明确说明。

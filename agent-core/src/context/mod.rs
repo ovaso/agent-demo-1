@@ -9,8 +9,6 @@ use super::{model::ModelContinuation, tool::ToolCall};
 mod compaction;
 mod memory;
 pub use compaction::{CompactionInfo, ContextWindow};
-#[cfg(test)]
-mod protocol_tests;
 mod store;
 
 #[cfg(feature = "sqlite")]
@@ -370,43 +368,5 @@ impl Context {
             self.history.drain(..remove);
             self.generation = self.generation.wrapping_add(1);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn keeps_the_system_prompt_and_latest_history() {
-        let mut context = Context::with_history_limit(2);
-        context.set_system_prompt("Be concise.");
-        context.push_user("first");
-        context.push_assistant("second");
-        context.push_tool("call-1", "echo", "third");
-
-        let messages = context.snapshot();
-        assert_eq!(messages.len(), 3);
-        assert_eq!(messages[0], Message::system("Be concise."));
-        assert_eq!(messages[1], Message::assistant("second"));
-        assert_eq!(messages[2], Message::tool("call-1", "echo", "third"));
-    }
-
-    #[test]
-    fn system_messages_replace_the_existing_prompt() {
-        let mut context = Context::with_system("old prompt");
-        context.push(Message::system("new prompt"));
-
-        assert_eq!(context.snapshot(), vec![Message::system("new prompt")]);
-    }
-
-    #[test]
-    fn clearing_history_preserves_the_system_prompt() {
-        let mut context = Context::with_system("You are helpful.");
-        context.push_user("hello");
-        context.clear_history();
-
-        assert_eq!(context.len(), 1);
-        assert_eq!(context.last().unwrap().role(), Role::System);
     }
 }

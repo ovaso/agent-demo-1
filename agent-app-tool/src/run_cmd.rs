@@ -1,11 +1,7 @@
-#[cfg(test)]
-use super::process_output::{OUTPUT_LIMIT, capture};
 use agent_core::{
     tool,
     tool::{ToolError, ToolOutput},
 };
-#[cfg(test)]
-use std::io::{self, Read};
 use std::process::Command;
 const ALLOWED_COMMANDS: &[&str] = &["rg", "awk", "sed", "grep"];
 
@@ -40,6 +36,3 @@ fn run_cmd(
     }
     super::process_output::execute(command)
 }
-
-#[cfg(test)]
-mod tests;

@@ -67,9 +67,4 @@ impl References {
         );
         (lines, unresolved)
     }
-
-    #[cfg(test)]
-    pub(crate) fn bytes(&self) -> usize {
-        self.source.len()
-    }
 }

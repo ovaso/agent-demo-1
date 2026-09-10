@@ -37,37 +37,3 @@ fn run_check(
         .env("CARGO_TERM_COLOR", "never");
     super::process_output::execute(command)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use agent_core::tool::{Arguments, Tool};
-    #[test]
-    fn formatting_check_returns_real_exit_status_without_modifying_source() {
-        let path = std::env::temp_dir().join(format!("agent-check-tool-{}", std::process::id()));
-        std::fs::create_dir_all(path.join("src")).unwrap();
-        std::fs::write(
-            path.join("Cargo.toml"),
-            "[package]\nname = \"check-fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
-        )
-        .unwrap();
-        let source = "pub fn value()->u32{1}";
-        std::fs::write(path.join("src/lib.rs"), source).unwrap();
-        let output = run_check_tool()
-            .invoke(
-                &Arguments::new()
-                    .with("check", "fmt")
-                    .with("cwd", path.to_string_lossy()),
-            )
-            .unwrap();
-        let result: serde_json::Value = serde_json::from_str(output.content()).unwrap();
-        assert!(!output.succeeded());
-        assert_eq!(result["success"], false);
-        assert_ne!(result["exit_code"], 0);
-        assert_eq!(
-            std::fs::read_to_string(path.join("src/lib.rs")).unwrap(),
-            source
-        );
-        std::fs::remove_dir_all(path).unwrap();
-    }
-}

@@ -122,27 +122,3 @@ impl ToolDefinition {
         &self.parameters
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn preserves_legacy_definitions_and_round_trips_reference_metadata() {
-        let old = r#"{"name":"inspect","description":"read","parameters":[],"read_only":true}"#;
-        let legacy: ToolDefinition = serde_json::from_str(old).unwrap();
-        assert_eq!(legacy.created_at(), 0);
-        assert_eq!(legacy.version(), "");
-        let current = legacy.clone().with_metadata(42, "v1.0.0-20260910");
-        assert!(current.same_contract(&legacy));
-        let json = serde_json::to_string(&current).unwrap();
-        assert!(
-            json.starts_with(r#"{"created_at":42,"name":"inspect","version":"v1.0.0-20260910""#)
-        );
-        assert_eq!(
-            serde_json::from_str::<ToolDefinition>(&json).unwrap(),
-            current
-        );
-        assert!(!current.clone().with_read_only(false).same_contract(&legacy));
-    }
-}

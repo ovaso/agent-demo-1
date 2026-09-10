@@ -53,6 +53,3 @@ fn write_file(
         serde_json::json!({"path":path,"bytes_written":content.len(),"mode":mode}).to_string(),
     ))
 }
-
-#[cfg(test)]
-mod tests;

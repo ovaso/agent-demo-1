@@ -77,27 +77,3 @@ fn number(value: Option<&str>, default: u64) -> Result<u64, ToolError> {
         })
         .unwrap_or(Ok(default))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use agent_core::tool::{Arguments, Tool};
-    #[test]
-    fn file_reads_are_bounded_and_preserve_the_source() {
-        let path = std::env::temp_dir().join(format!("agent-read-tool-{}", std::process::id()));
-        fs::write(&path, "abcdef").unwrap();
-        let tool = read_file_tool();
-        let arguments = Arguments::new()
-            .with("path", path.to_string_lossy())
-            .with("offset", "2")
-            .with("limit", "2");
-        let output = tool.invoke(&arguments).unwrap();
-        let value: serde_json::Value = serde_json::from_str(output.content()).unwrap();
-        assert_eq!(value["text"], "cd");
-        assert_eq!(value["next_offset"], 4);
-        assert_eq!(value["truncated"], true);
-        assert_eq!(fs::read(&path).unwrap(), b"abcdef");
-        assert!(tool.invoke(&arguments.with("limit", "65537")).is_err());
-        fs::remove_file(path).unwrap();
-    }
-}

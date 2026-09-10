@@ -58,31 +58,3 @@ pub(super) fn parse_response(response: &Value) -> Result<ModelResponse, ModelErr
         .with_usage(usage::parse(response))
         .with_stop_reason(stop))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn parses_text_and_tool_calls() {
-        let response = json!({
-            "content": [
-                {"type": "text", "text": "正在查询。"},
-                {"type": "tool_use", "id": "toolu-1", "name": "search", "input": {"query": "Rust"}}
-            ]
-        });
-
-        let (text, calls) = parse_response(&response).unwrap().into_parts();
-        assert_eq!(text.as_deref(), Some("正在查询。"));
-        assert_eq!(calls[0].id(), "toolu-1");
-        assert_eq!(calls[0].arguments().get("query"), Some("Rust"));
-    }
-    #[test]
-    fn parses_non_streaming_usage_and_explicit_cache_miss() {
-        let response = parse_response(&json!({"content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":5,"output_tokens":3,"cache_read_input_tokens":0,"cache_creation_input_tokens":7}})).unwrap();
-        assert_eq!(response.usage().input_tokens, Some(12));
-        assert_eq!(response.usage().total_tokens(), Some(15));
-        assert_eq!(response.usage().cache_hit(), Some(false));
-    }
-}

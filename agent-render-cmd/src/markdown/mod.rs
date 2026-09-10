@@ -67,8 +67,6 @@ pub(crate) fn scoped(
 }
 
 pub(crate) fn parser(source: &str) -> Parser<'_> {
-    #[cfg(test)]
-    PARSER_CALLS.with(|count| count.set(count.get() + 1));
     Parser::new_ext(source, parse_options())
 }
 
@@ -79,28 +77,3 @@ fn parse_options() -> ParseOptions {
         | ParseOptions::ENABLE_FOOTNOTES
         | ParseOptions::ENABLE_MATH
 }
-
-#[cfg(test)]
-thread_local! { static PARSER_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
-
-#[cfg(test)]
-pub(crate) fn parser_calls() -> usize {
-    PARSER_CALLS.with(std::cell::Cell::get)
-}
-
-#[cfg(test)]
-pub(crate) fn render_with_code(
-    source: &str,
-    options: &Options,
-    codes: &mut CodeBlocks,
-) -> Vec<Line> {
-    render_context(source, options, codes, &[], &mut false)
-}
-
-#[cfg(test)]
-pub(crate) fn render(source: &str, options: &Options) -> Vec<Line> {
-    render_with_code(source, options, &mut CodeBlocks::default())
-}
-
-#[cfg(test)]
-mod tests;

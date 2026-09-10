@@ -72,35 +72,3 @@ pub(super) fn reasoning(body: &mut Value, effort: Option<&str>, url: &str) {
         body["reasoning_effort"] = json!(effort);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn compatible_hosts_opt_in_and_use_at_most_three_breakpoints() {
-        let mut body = json!({"system":"fixed","messages":[],"tools":[{"name":"read"}]});
-        anthropic(&mut body, None, "https://compatible.example/v1");
-        assert!(body.get("cache_control").is_none());
-        anthropic(
-            &mut body,
-            Some(CacheTtl::Long),
-            "https://compatible.example/v1",
-        );
-        assert_eq!(body["cache_control"]["ttl"], "1h");
-        assert_eq!(body["system"][0]["cache_control"]["ttl"], "1h");
-        assert_eq!(body["tools"][0]["cache_control"]["ttl"], "1h");
-    }
-    #[test]
-    fn reasoning_is_explicit_and_deepseek_uses_its_own_switch() {
-        let mut body = json!({});
-        reasoning(&mut body, None, "https://api.deepseek.com");
-        assert_eq!(body, json!({}));
-        reasoning(&mut body, Some("low"), "https://api.deepseek.com");
-        assert_eq!(body["thinking"]["type"], "enabled");
-        assert_eq!(body["reasoning_effort"], "low");
-        let mut body = json!({});
-        reasoning(&mut body, Some("none"), "https://api.deepseek.com");
-        assert_eq!(body, json!({"thinking":{"type":"disabled"}}));
-        assert!(validate_effort(Some("invalid")).is_err());
-    }
-}

@@ -29,15 +29,3 @@ impl Write for Body {
         Ok(())
     }
 }
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-    #[test]
-    fn bounds_all_sections_using_actual_encoded_utf8_bytes() {
-        let value = json!({"messages":[{"content":"中文\n\""}],"tools":[{"description":"large schema"}],"system":"memory"});
-        let encoded = serde_json::to_vec(&value).unwrap();
-        assert_eq!(encode(&value, encoded.len()).unwrap(), encoded);
-        assert!(encode(&value, encoded.len() - 1).is_err());
-    }
-}

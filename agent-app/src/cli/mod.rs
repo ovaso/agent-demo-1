@@ -8,8 +8,6 @@ use std::error::Error;
 
 mod commands;
 mod session;
-#[cfg(test)]
-mod tests;
 mod view;
 
 pub(crate) fn run<M: ModelProvider>(

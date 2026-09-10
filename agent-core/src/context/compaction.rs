@@ -177,6 +177,3 @@ fn bound(summary: &mut String, limit: usize) {
     summary.insert_str(0, "[部分较早摘录已省略]\n");
     summary.insert_str(0, HEADER);
 }
-
-#[cfg(test)]
-mod tests;

@@ -97,7 +97,7 @@ cargo run -p agent-app
 # 保留代码高亮，关闭数学依赖
 cargo run -p agent-app --no-default-features --features syntax-highlighting
 # 查看数学样例，模拟逐字符输入
-cargo run -p agent-render-cmd --features math,syntax-highlighting --example preview -- 100 24 1 < agent-render-cmd/tests/fixtures/math.md
+cargo run -p agent-render-cmd --features math,syntax-highlighting --example preview -- 100 24 1 < input.md
 ```
 
 ## 代码面板与语法高亮
@@ -118,8 +118,8 @@ cargo run -p agent-app
 # 关闭高亮依赖，保留数学；代码仍使用矩形面板
 cargo run -p agent-app --no-default-features --features math
 # 独立库的 feature 验证
-cargo test -p agent-render-cmd --features syntax-highlighting
-cargo test -p agent-render-cmd --no-default-features
+cargo check -p agent-render-cmd --features syntax-highlighting
+cargo check -p agent-render-cmd --no-default-features
 ```
 
 ## 文件划分与来源
@@ -198,21 +198,12 @@ Glow 的整篇读取流程、Glamour 的 Go Markdown 解析器和整篇缓冲转
 ## 验证和本地预览
 
 ```sh
-cargo test -p agent-render-cmd
-cargo run --release -p agent-render-cmd --features syntax-highlighting --example preview -- 80 < agent-render-cmd/tests/fixtures/markdown.md
+cargo check -p agent-render-cmd
+cargo run --release -p agent-render-cmd --features syntax-highlighting --example preview -- 80 < input.md
 # 120 列、12 行可视区，逐字符喂入
-cargo run --release -p agent-render-cmd --features syntax-highlighting --example preview -- 120 12 1 < agent-render-cmd/tests/fixtures/markdown.md
-cargo run --release -p agent-render-cmd --features syntax-highlighting --example measure
-cargo run --release -p agent-render-cmd --features syntax-highlighting --example measure_code
-cargo run --release -p agent-render-cmd --features math --example measure_math
+cargo run --release -p agent-render-cmd --features syntax-highlighting --example preview -- 120 12 1 < input.md
 ```
 
-`preview` 是供人工检查 ANSI 输出的例子，参数为列数、行数、每片段字符数（默认 `80 40 0`，0 表示按完整行）；实际应用同时支持不完整行片段。`measure` 使用固定本地 fixture、32 字节以内的 UTF-8 片段和计数 writer（使用 black_box 防止被优化消除），各重复 200 次，分别报告原文透传与渲染耗时，排除网络和终端绘制延迟。这是当前实现的成本测量，不等于相对旧实现的性能收益。
+`preview` 是供人工检查 ANSI 输出的例子，参数为列数、行数、每片段字符数（默认 `80 40 0`，0 表示按完整行）；实际应用同时支持不完整行片段。上面的 `input.md` 为自行提供的 Markdown 文件。
 
-代码面板的单独样例见 [code-panels.md](tests/fixtures/code-panels.md)，可用同一个 `preview` 例子查看。
-
-`measure_code` 在同一带高亮 feature 的构建中，对固定 277 字节代码样例、9 个片段比较普通代码面板、首次高亮（含惰性初始化）和后续高亮的成本。语法高亮会增加代码、内置语法与主题资源体积；测量结果不包含实际终端 I/O。
-
-Workspace 检查和本轮构建对比记录见 [PLAN.md](PLAN.md)。
-
-`measure_math` 使用固定数学样例、32 字节以内的 UTF-8 片段和计数 writer，在同一个带 `math` feature 的构建中比较启用/关闭数学排版的成本，各运行 100 次，不含模型、网络或真实终端 I/O。
+自动化测试、测试夹具和 `measure*` 基准程序已按用户要求删除。此前的构建与测量记录保留在 [PLAN.md](PLAN.md)，不代表当前仍有对应测试入口。

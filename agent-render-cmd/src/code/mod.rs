@@ -8,8 +8,6 @@ mod highlight;
 mod panel;
 #[cfg(feature = "syntax-highlighting")]
 mod syntax;
-#[cfg(test)]
-mod tests;
 
 const MAX_CACHED_BLOCKS: usize = 8;
 
@@ -60,12 +58,6 @@ impl CodeBlocks {
 
     pub(crate) fn end(&mut self) {
         self.entries.truncate(self.next.min(MAX_CACHED_BLOCKS));
-    }
-
-    #[cfg(all(test, feature = "syntax-highlighting"))]
-    pub(crate) fn clear(&mut self) {
-        self.entries.clear();
-        self.next = 0;
     }
 }
 

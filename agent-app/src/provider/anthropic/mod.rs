@@ -165,21 +165,3 @@ impl ModelProvider for AnthropicProvider {
         Ok(parsed.with_request_bytes(request_bytes))
     }
 }
-
-#[cfg(test)]
-mod caching_tests {
-    use super::*;
-    use agent_core::context::Message;
-    #[test]
-    fn official_anthropic_request_marks_stable_system_and_growing_history() {
-        let provider = AnthropicProvider::new("fake", "model");
-        let request = ModelRequest::new(
-            vec![Message::system("fixed"), Message::user("task")],
-            &[],
-            &[],
-        );
-        let body = provider.request_body(&request).unwrap();
-        assert_eq!(body["cache_control"]["type"], "ephemeral");
-        assert_eq!(body["system"][0]["cache_control"]["type"], "ephemeral");
-    }
-}

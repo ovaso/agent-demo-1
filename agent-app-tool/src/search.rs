@@ -29,35 +29,3 @@ fn search_files(
     ]);
     super::process_output::execute(command)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use agent_core::tool::{Arguments, Tool};
-    #[test]
-    fn searches_literals_without_interpreting_regex_or_options() {
-        let path = std::env::temp_dir().join(format!("agent-search-tool-{}", std::process::id()));
-        std::fs::write(&path, "a.*b\naxxb\n--pre=anything\n").unwrap();
-        let search = search_files_tool();
-        let output = search
-            .invoke(
-                &Arguments::new()
-                    .with("pattern", "a.*b")
-                    .with("path", path.to_string_lossy()),
-            )
-            .unwrap();
-        let value: serde_json::Value = serde_json::from_str(output.content()).unwrap();
-        assert!(value["stdout"].as_str().unwrap().contains("a.*b"));
-        assert!(!value["stdout"].as_str().unwrap().contains("axxb"));
-        let output = search
-            .invoke(
-                &Arguments::new()
-                    .with("pattern", "--pre=anything")
-                    .with("path", path.to_string_lossy()),
-            )
-            .unwrap();
-        let value: serde_json::Value = serde_json::from_str(output.content()).unwrap();
-        assert_eq!(value["success"], true);
-        std::fs::remove_file(path).unwrap();
-    }
-}

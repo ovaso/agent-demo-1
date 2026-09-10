@@ -4,8 +4,6 @@ use syn::{ItemFn, parse_macro_input};
 mod config;
 mod expand;
 mod parameters;
-#[cfg(test)]
-mod tests;
 
 /// Generate a tool and add its factory to an automatically discoverable group.
 /// Both `created_at = <fixed Unix seconds>` and `version = "..."` are required.

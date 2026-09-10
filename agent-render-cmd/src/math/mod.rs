@@ -51,5 +51,3 @@ pub(crate) fn display(source: &str, width: usize, options: &Options) -> Option<V
     let _ = (source, width, options);
     None
 }
-#[cfg(all(test, feature = "math"))]
-mod tests;

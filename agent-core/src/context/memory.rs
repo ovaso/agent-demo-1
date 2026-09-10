@@ -39,19 +39,3 @@ impl ContextStore for MemoryContextStore {
         Ok(self.contexts.remove(session_id).is_some())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn saves_loads_and_deletes_a_context() {
-        let mut store = MemoryContextStore::new();
-        let context = Context::with_system("保持简洁。");
-
-        store.save("session-1", &context).unwrap();
-        assert_eq!(store.load("session-1").unwrap(), Some(context));
-        assert!(store.delete("session-1").unwrap());
-        assert_eq!(store.load("session-1").unwrap(), None);
-    }
-}

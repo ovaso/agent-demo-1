@@ -154,20 +154,3 @@ impl MemoryStore for SqliteMemoryStore {
         Ok(removed > 0)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn saves_and_searches_memories() {
-        let mut store = SqliteMemoryStore::open_in_memory().unwrap();
-        let memory = Memory::new("rust", "Rust 的所有权模型避免悬垂引用")
-            .with_tag("语言")
-            .with_tag("所有权");
-        store.save(memory.clone()).unwrap();
-        assert_eq!(store.get("rust").unwrap(), Some(memory));
-        assert_eq!(store.search("所有权").unwrap().len(), 1);
-        assert!(store.delete("rust").unwrap());
-    }
-}

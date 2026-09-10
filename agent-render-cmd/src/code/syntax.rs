@@ -34,8 +34,6 @@ pub(super) struct Session {
     spans: Vec<Span>,
     state: Option<(HighlightState, ParseState)>,
     failed: bool,
-    #[cfg(test)]
-    pub(super) complete_line_calls: usize,
 }
 
 impl Session {
@@ -46,8 +44,6 @@ impl Session {
             spans: Vec::new(),
             state: Some(HighlightLines::new(syntax, &ASSETS.theme).state()),
             failed: false,
-            #[cfg(test)]
-            complete_line_calls: 0,
         }
     }
 }
@@ -93,10 +89,6 @@ pub(super) fn highlight<'a>(
         .expect("checkpoint is restored after each call");
     let mut highlighter = HighlightLines::from_state(&ASSETS.theme, state.0, state.1);
     for line in source[offset..complete_end].split_inclusive('\n') {
-        #[cfg(test)]
-        {
-            session.complete_line_calls += 1;
-        }
         if line.len() > MAX_HIGHLIGHT_LINE_BYTES
             || !append_spans(&mut highlighter, line, offset, &mut session.spans)
         {

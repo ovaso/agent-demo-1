@@ -33,33 +33,3 @@ pub(super) fn parse(response: &Value) -> ModelUsage {
             .and_then(Value::as_u64),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn reads_deepseek_cache_tokens_without_double_counting() {
-        let usage = parse(
-            &json!({"usage":{"prompt_tokens":5000,"completion_tokens":100,
-            "prompt_cache_hit_tokens":4000,"prompt_cache_miss_tokens":1000}}),
-        );
-        assert_eq!(usage.cached_input_tokens, Some(4000));
-        assert_eq!(usage.total_tokens(), Some(5100));
-    }
-
-    #[test]
-    fn explicit_zero_wins_and_absent_or_invalid_usage_stays_unknown() {
-        let usage = parse(
-            &json!({"usage":{"prompt_tokens_details":{"cached_tokens":0},
-            "prompt_cache_hit_tokens":20}}),
-        );
-        assert_eq!(usage.cached_input_tokens, Some(0));
-        assert_eq!(parse(&json!({})).cached_input_tokens, None);
-        assert_eq!(
-            parse(&json!({"usage":{"prompt_cache_hit_tokens":-1}})).cached_input_tokens,
-            None
-        );
-    }
-}

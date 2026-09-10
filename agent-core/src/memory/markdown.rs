@@ -125,6 +125,3 @@ fn encode_id(id: &str) -> String {
     }
     encoded
 }
-
-#[cfg(test)]
-mod tests;

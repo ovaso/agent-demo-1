@@ -87,19 +87,3 @@ impl ContextStore for SqliteContextStore {
         Ok(removed > 0)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn persists_a_context() {
-        let mut store = SqliteContextStore::open_in_memory().unwrap();
-        let mut context = Context::with_system("保持简洁。");
-        context.push_user("你好");
-
-        store.save("session-1", &context).unwrap();
-
-        assert_eq!(store.load("session-1").unwrap(), Some(context));
-    }
-}

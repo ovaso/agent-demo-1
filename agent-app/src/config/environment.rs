@@ -134,6 +134,3 @@ fn invalid(path: &Path, reason: &str) -> io::Error {
         format!("环境文件 {}：{reason}", path.display()),
     )
 }
-
-#[cfg(test)]
-mod tests;

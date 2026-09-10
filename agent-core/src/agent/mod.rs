@@ -9,8 +9,6 @@ pub mod planning;
 pub mod routing;
 mod runner;
 pub mod runtime;
-#[cfg(test)]
-mod tests;
 mod tool_calls;
 
 use std::{

@@ -205,6 +205,9 @@ fn write_node(node: &Node, output: &mut impl Write) -> io::Result<()> {
         count(&fields["model_calls"]),
         count(&usage["reasoning_tokens"])
     )?;
+    if let Some(percent) = fields["cache_read_percent"].as_f64() {
+        write!(output, " cache_tokens={percent:.2}%")?;
+    }
     if let Some(latency) = node.first_delta_ms {
         write!(output, " 首字={latency}ms")?;
     }

@@ -20,6 +20,13 @@ impl ModelUsage {
         self.cached_input_tokens.map(|tokens| tokens > 0)
     }
 
+    /// 缓存读取占全部输入的比例；缺失、零分母或不一致的报告不伪造比例。
+    pub fn cache_read_percent(&self) -> Option<f64> {
+        let input = self.input_tokens?;
+        let cached = self.cached_input_tokens?;
+        (input > 0 && cached <= input).then(|| cached as f64 * 100.0 / input as f64)
+    }
+
     pub(crate) fn zero() -> Self {
         Self {
             input_tokens: Some(0),
@@ -42,5 +49,28 @@ impl ModelUsage {
             other.cache_write_input_tokens,
         );
         self.reasoning_tokens = sum(self.reasoning_tokens, other.reasoning_tokens);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ratio_is_weighted_by_input_and_unknown_is_not_zero() {
+        let mut usage = ModelUsage {
+            input_tokens: Some(100),
+            cached_input_tokens: Some(90),
+            ..Default::default()
+        };
+        usage.add(ModelUsage {
+            input_tokens: Some(900),
+            cached_input_tokens: Some(0),
+            ..Default::default()
+        });
+        assert_eq!(usage.cache_read_percent(), Some(9.0));
+        usage.add(ModelUsage::default());
+        assert_eq!(usage.cache_read_percent(), None);
+        assert_eq!(ModelUsage::zero().cache_read_percent(), None);
     }
 }

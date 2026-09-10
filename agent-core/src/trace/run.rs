@@ -124,6 +124,7 @@ impl RunTrace {
         .with_field("model_calls", span.model_calls)
         .with_field("cache_hits", span.cache_hits)
         .with_field("cache_reports", span.cache_reports)
+        .with_field("cache_read_percent", span.usage.cache_read_percent())
         .with_field(
             "cache_status",
             if span.model_calls == 0 {

@@ -15,6 +15,8 @@ pub enum NodeStatus {
     Succeeded,
     Failed,
     Cancelled,
+    BudgetExceeded,
+    NeedsCoordinator,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -36,6 +38,10 @@ pub enum ValidationKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NodeRun {
+    #[serde(default)]
+    pub origin: super::delegation::NodeOrigin,
+    #[serde(default)]
+    pub policy: Option<super::delegation::AgentPolicy>,
     #[serde(default)]
     pub reused_from: Option<u64>,
     #[serde(default)]
@@ -61,8 +67,10 @@ pub struct NodeRun {
 }
 
 impl NodeRun {
-    fn new(task: PlanTask) -> Self {
+    pub(crate) fn new(task: PlanTask) -> Self {
         Self {
+            origin: Default::default(),
+            policy: None,
             reused_from: None,
             evidence_revision: 0,
             prior_output: String::new(),
@@ -84,8 +92,20 @@ impl NodeRun {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GraphRun {
+    #[serde(default = "engaged_default")]
+    pub(crate) engaged: bool,
     pub plan_version: u64,
     pub nodes: BTreeMap<String, NodeRun>,
+}
+
+fn engaged_default() -> bool {
+    true
+}
+
+impl GraphRun {
+    pub fn is_engaged(&self) -> bool {
+        self.engaged
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,9 +130,38 @@ impl GraphState {
     }
     pub(crate) fn unfinished(&self) -> bool {
         self.current().is_some_and(|run| {
-            run.nodes
-                .values()
-                .any(|node| node.status != NodeStatus::Succeeded)
+            run.nodes.values().any(|node| {
+                if node.origin == super::delegation::NodeOrigin::Delegated {
+                    !matches!(node.status, NodeStatus::Succeeded | NodeStatus::Cancelled)
+                } else {
+                    run.engaged && node.status != NodeStatus::Succeeded
+                }
+            })
+        })
+    }
+    pub(crate) fn ready_delegation(&self) -> Option<&str> {
+        let graph = self.current()?;
+        graph
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                node.origin == super::delegation::NodeOrigin::Delegated
+                    && matches!(node.status, NodeStatus::Pending | NodeStatus::Paused)
+                    && node.task.depends_on.iter().all(|id| {
+                        graph
+                            .nodes
+                            .get(id)
+                            .is_some_and(|dep| dep.status == NodeStatus::Succeeded)
+                    })
+            })
+            .map(|(id, _)| id.as_str())
+    }
+    pub(crate) fn has_open_delegations(&self) -> bool {
+        self.current().is_some_and(|run| {
+            run.nodes.values().any(|node| {
+                node.origin == super::delegation::NodeOrigin::Delegated
+                    && !matches!(node.status, NodeStatus::Succeeded | NodeStatus::Cancelled)
+            })
         })
     }
     pub(crate) fn ready(&self) -> Option<&str> {
@@ -146,6 +195,11 @@ impl GraphState {
         if self.active.is_some() {
             return Err(RuntimeError::Invalid(
                 "活动节点未结算，不能替换图计划".into(),
+            ));
+        }
+        if self.has_open_delegations() {
+            return Err(RuntimeError::Invalid(
+                "修订计划前需完成或取消现有委托".into(),
             ));
         }
         plan.validate()?;
@@ -208,12 +262,30 @@ impl GraphState {
                     node.validation = old.validation;
                     node.evidence_revision = old.evidence_revision;
                     node.read_only = old.read_only;
+                    node.policy = old.policy.clone();
                     node.reused_from = Some(previous.plan_version);
                     node.prior_output = String::new();
                 }
             }
         }
+        if let Some(previous) = self.current() {
+            for (id, old) in &previous.nodes {
+                if old.origin == super::delegation::NodeOrigin::Delegated && !nodes.contains_key(id)
+                {
+                    let mut node = NodeRun::new(old.task.clone());
+                    node.origin = old.origin;
+                    node.policy = old.policy.clone();
+                    node.status = old.status;
+                    node.output.clone_from(&old.output);
+                    node.validation = old.validation;
+                    node.attempts = old.attempts;
+                    node.reused_from = Some(previous.plan_version);
+                    nodes.insert(id.clone(), node);
+                }
+            }
+        }
         self.runs.push(GraphRun {
+            engaged: self.current().is_some_and(|run| run.engaged),
             plan_version: version,
             nodes,
         });

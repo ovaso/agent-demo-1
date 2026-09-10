@@ -11,7 +11,7 @@ pub(super) struct ControlOutput {
 }
 
 pub(super) fn definitions() -> Vec<ToolDefinition> {
-    vec![
+    let mut tools = vec![
         ToolDefinition::new(
             "runtime_plan",
             "提交或修订结构化计划。计划 JSON 含 goal、requirements 字符串数组、tasks 数组。每个任务含 id、description、depends_on、acceptance、action。action 为 {\"kind\":\"agent\",\"prompt\":\"...\"} 或 {\"kind\":\"tool\",\"name\":\"...\",\"arguments\":{\"参数\":\"值\"},\"check\":\"succeeded\"/\"exit_code_zero\"}。goal 由运行时固定为原任务；旧验收要求必须保留。",
@@ -22,7 +22,7 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
         ),
         ToolDefinition::new(
             "runtime_board_write",
-            "写入带版本的共享记录，不能将模型意见标记为程序验证。update JSON 含 key、expected_revision（首次 0）、kind（observation/hypothesis/decision/blocker/artifact）、content、sources（可选，每项 uri 和 version）。作者由运行时指定。",
+            "写入带版本的共享记录，不能将模型意见标记为程序验证。update JSON 含 key、expected_revision（首次 0）、kind（observation/hypothesis/decision/blocker/artifact）、content、sources（可选，每项 uri 和 version）。作者由运行时指定。子Agent使用自己的key，只能更新自己的条目；共享decision由协调者发布。",
             vec![Parameter::required("update", "共享记录更新 JSON 字符串")],
         ),
         ToolDefinition::new(
@@ -57,7 +57,9 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
             "重试已知失败的只读或验证节点，每节点最多 3 次；普通写入节点需操作者明确重试。",
             vec![Parameter::required("node", "任务 ID")],
         ),
-    ]
+    ];
+    tools.extend(super::agent_tools::definitions());
+    tools
 }
 
 pub(super) fn invoke(
@@ -65,6 +67,9 @@ pub(super) fn invoke(
     call: &ToolCall,
     tools: &crate::tool::Registry,
 ) -> Result<ControlOutput, RuntimeError> {
+    if super::agent_tools::handles(call.name()) {
+        return super::agent_tools::invoke(state, call);
+    }
     let allowed: &[&str] = match call.name() {
         "runtime_plan" => &["expected_revision", "plan"],
         "runtime_board_write" => &["update"],
@@ -83,6 +88,11 @@ pub(super) fn invoke(
     }
     let text = match call.name() {
         "runtime_plan" => {
+            if state.graph.has_open_delegations() {
+                return Err(RuntimeError::Invalid(
+                    "需先完成或取消委托，再修订计划".into(),
+                ));
+            }
             if state.graph.active.is_some() {
                 return Err(RuntimeError::Invalid(
                     "节点不能修改根计划，需先交回协调者".into(),
@@ -129,18 +139,31 @@ pub(super) fn invoke(
             if update.kind == EntryKind::Verification {
                 return Err(RuntimeError::Invalid("模型不能伪造程序验证记录".into()));
             }
-            let entry = state.blackboard.write(
-                state.graph.active.as_deref().unwrap_or("main"),
-                state.plans.revision(),
-                update,
-            )?;
+            let actor = state.actor();
+            if actor != "main"
+                && (update.kind == EntryKind::Decision
+                    || state
+                        .blackboard
+                        .latest(&update.key)
+                        .is_some_and(|entry| entry.author != actor))
+            {
+                return Err(RuntimeError::Invalid(
+                    "请提交自己的证据条目，由协调者汇总共享决策".into(),
+                ));
+            }
+            let entry = state
+                .blackboard
+                .write(&actor, state.plans.revision(), update)?;
             state.work_revision += 1;
             serde_json::json!({"key":entry.key,"revision":entry.revision,"sequence":entry.sequence})
                 .to_string()
         }
         "runtime_board_read" => read_board(state, call)?,
         "runtime_plan_ready" => {
-            if state.intent != WorkIntent::PlanOnly || state.plans.current().is_none() {
+            if state.intent != WorkIntent::PlanOnly
+                || state.plans.current().is_none()
+                || state.graph.unfinished()
+            {
                 return Err(RuntimeError::Invalid(
                     "当前不是具备有效计划的只规划任务".into(),
                 ));

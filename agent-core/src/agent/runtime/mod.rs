@@ -1,7 +1,11 @@
 //! 可暂停、恢复并逐工具提交检查点的同步运行时。
 
+mod agent_tools;
 mod budget;
 mod control;
+mod delegation;
+#[cfg(test)]
+mod delegation_tests;
 mod engine;
 mod error;
 mod execution;

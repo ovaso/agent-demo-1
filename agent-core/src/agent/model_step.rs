@@ -7,6 +7,7 @@ use serde_json::json;
 use std::time::Instant;
 
 pub(super) struct ModelStep<'a> {
+    pub actor: &'a str,
     pub request: ModelRequest<'a>,
     pub session_id: &'a str,
     pub step: usize,
@@ -20,6 +21,7 @@ pub(super) fn stream<M: ModelProvider, T: TraceSink>(
     mut on_text_delta: Option<&mut dyn FnMut(&str)>,
 ) -> Result<ModelResponse, AgentError> {
     let ModelStep {
+        actor,
         request,
         session_id,
         step,
@@ -27,7 +29,7 @@ pub(super) fn stream<M: ModelProvider, T: TraceSink>(
     trace.start(
         sink,
         "model.request",
-        json!({"provider": std::any::type_name::<M>(), "model": model.model_name(), "loop_step": step}),
+        json!({"provider": std::any::type_name::<M>(), "model": model.model_name(), "loop_step": step, "actor":actor}),
     )?;
     trace.model_usage(Default::default());
     trace.record(

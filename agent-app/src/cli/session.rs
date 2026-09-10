@@ -49,7 +49,11 @@ impl<M: ModelProvider> Session<M> {
         Ok(Self {
             runtime,
             session_id: env::var("RS_AGENT_SESSION").unwrap_or_else(|_| "default".into()),
-            limits: RunLimits::new(max_steps),
+            limits: RunLimits {
+                max_delegations: env::var("RS_AGENT_MAX_DELEGATIONS")
+                    .map_or(Ok(8), |value| value.parse::<usize>())?,
+                ..RunLimits::new(max_steps)
+            },
         })
     }
 
@@ -107,6 +111,18 @@ impl<M: ModelProvider> Session<M> {
             Command::Graph => {
                 let id = self.id(None)?;
                 super::print_graph(&self.runtime.state(&id)?);
+            }
+            Command::Agents => {
+                let id = self.id(None)?;
+                super::print_agents(&self.runtime.state(&id)?);
+            }
+            Command::AgentBudget(agent, max_steps) => {
+                let id = self.id(None)?;
+                super::print_agents(&self.runtime.set_agent_budget(&id, agent, max_steps)?);
+            }
+            Command::CancelAgent(agent) => {
+                let id = self.id(None)?;
+                super::print_agents(&self.runtime.cancel_agent(&id, agent)?);
             }
             Command::RetryNode(node) => {
                 let id = self.id(None)?;

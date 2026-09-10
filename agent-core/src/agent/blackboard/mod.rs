@@ -88,7 +88,7 @@ impl Blackboard {
             || update.key.len() > 128
             || update.key.contains(char::is_whitespace)
             || author.is_empty()
-            || author.len() > 128
+            || author.len() > 256
             || update.content.len() > MAX_ENTRY_BYTES
             || update.sources.len() > 16
             || update.sources.iter().any(|source| {

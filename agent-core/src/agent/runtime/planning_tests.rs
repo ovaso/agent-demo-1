@@ -113,7 +113,7 @@ fn planning_context_exposes_only_read_capabilities_and_keeps_saved_history_uncha
     let (messages, tools) = super::planning_prompt::request_context(&state).unwrap();
     assert!(!tools.iter().any(|tool| tool.name() == "count"));
     assert!(tools.iter().any(|tool| tool.name() == "runtime_plan"));
-    assert_eq!(messages.len(), state.context().len() + 1);
+    assert_eq!(messages.len(), state.context().len() + 2);
     assert_eq!(
         state.context().snapshot(),
         vec![crate::context::Message::user("go")]

@@ -167,3 +167,33 @@ fn cli_can_select_graph_before_executing_a_saved_plan() {
     );
     assert_eq!(state.budget().model_calls(), 3);
 }
+
+#[test]
+fn model_can_delegate_from_loop_and_cli_reports_local_usage() {
+    let directory = Directory::new();
+    let spec = serde_json::json!({"name":"inspector","instruction":"inspect independently","acceptance":["report findings"],"tools":[],"max_steps":1}).to_string();
+    let response = ModelResponse::tool_calls(vec![ToolCall::new(
+        "d",
+        "runtime_delegate",
+        Arguments::new().with("spec", spec),
+    )]);
+    let mut session = directory.session(vec![
+        response,
+        ModelResponse::text("worker report"),
+        ModelResponse::text("root report"),
+    ]);
+    session.limits = RunLimits::new(3);
+    session.handle(parse("inspect this").unwrap()).unwrap();
+    session.handle(parse("/agents").unwrap()).unwrap();
+    let state = session.runtime.store().latest("session").unwrap().unwrap();
+    assert_eq!(state.result().unwrap().text(), "root report");
+    assert_eq!(state.budget().model_calls(), 3);
+    assert_eq!(
+        state.graph().current().unwrap().nodes["inspector"]
+            .policy
+            .as_ref()
+            .unwrap()
+            .model_calls,
+        1
+    );
+}

@@ -54,10 +54,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         }
         let allowed = state.tools.iter().find(|tool| tool.name() == call.name());
         let read_only = allowed.is_some_and(|tool| tool.is_read_only());
-        if allowed.is_none()
-            || (state.intent == super::WorkIntent::PlanOnly
-                && !allowed.is_some_and(|tool| tool.is_read_only()))
-        {
+        if !state.tool_allowed(call.name()) {
             self.accept_tool(
                 state,
                 ToolOutput::text("拒绝执行：工具不在当前任务允许的能力集合中"),

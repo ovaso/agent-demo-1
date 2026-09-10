@@ -33,6 +33,9 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                     .map_err(|error| RuntimeError::Invalid(error.to_string()))?;
             }
         }
+        if state.graph.has_open_delegations() {
+            return Err(RuntimeError::Invalid("需先结算委托再修订计划".into()));
+        }
         state.plans.propose(expected_revision, plan)?;
         if state.graph.current().is_some() {
             state.graph.bind(

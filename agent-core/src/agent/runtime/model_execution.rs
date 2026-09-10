@@ -22,6 +22,18 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             state.status = RunStatus::Paused(PauseReason::Budget);
             return self.commit(state);
         }
+        if state
+            .agent_policy()
+            .is_some_and(|policy| policy.model_calls >= policy.max_steps)
+        {
+            super::graph_execution::finish_node(
+                state,
+                super::super::graph::NodeStatus::BudgetExceeded,
+                Some("局部模型步数已用完，需要协调者调整额度或取消。".into()),
+                None,
+            )?;
+            return self.commit(state);
+        }
         if let Err(error) = validate_protocol(&state.context).and_then(|()| {
             super::store::bounded_json(&state.context, state.limits.max_context_bytes)
         }) {
@@ -38,14 +50,25 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             }
         };
         state.budget.model_calls += 1;
+        if let Some(id) = state.graph.active.clone()
+            && let Some(policy) = state
+                .graph
+                .current_mut()
+                .and_then(|run| run.nodes.get_mut(&id))
+                .and_then(|node| node.policy.as_mut())
+        {
+            policy.model_calls += 1;
+        }
         state.phase = LoopPhase::ModelInFlight;
         self.commit(state)?;
         let request = ModelRequest::new(messages, &state.memories, &tools);
+        let actor = state.actor();
         let response = model_step::stream(
             &mut self.model,
             &mut self.trace,
             trace,
             ModelStep {
+                actor: &actor,
                 request,
                 session_id: &state.session_id,
                 step: state.budget.model_calls as usize,
@@ -83,22 +106,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 return Err(AgentError::EmptyModelResponse.into());
             };
             state.context.push_assistant(&text);
-            if state.intent == super::WorkIntent::PlanOnly {
-                state.status = RunStatus::Paused(if state.plans.current().is_some() {
-                    PauseReason::PlanReady
-                } else {
-                    PauseReason::Model("需要通过 runtime_plan 提交结构化计划".into())
-                });
-                return self.commit(state);
-            }
-            state.result = Some(AgentResult {
-                // The coordinator is the only actor that completes the root run.
-                text,
-                steps: state.budget.model_calls as usize,
-                session_finished: false,
-            });
             if state.graph.active.is_some() {
-                let text = state.result.take().expect("model result").text;
                 super::graph_execution::finish_node(
                     state,
                     super::super::graph::NodeStatus::Succeeded,
@@ -108,12 +116,23 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 return self.commit(state);
             }
             if state.graph.unfinished() {
-                state.result = None;
-                state.status = RunStatus::Paused(PauseReason::GraphBlocked(
-                    "仍有未通过的图节点；请继续、重试或重新规划".into(),
-                ));
+                state.status =
+                    RunStatus::Paused(PauseReason::GraphBlocked("仍有未完成工作或委托".into()));
                 return self.commit(state);
             }
+            if state.intent == super::WorkIntent::PlanOnly {
+                state.status = RunStatus::Paused(if state.plans.current().is_some() {
+                    PauseReason::PlanReady
+                } else {
+                    PauseReason::Model("需要提交结构化计划".into())
+                });
+                return self.commit(state);
+            }
+            state.result = Some(AgentResult {
+                text,
+                steps: state.budget.model_calls as usize,
+                session_finished: false,
+            });
             state.phase = LoopPhase::Done;
             state.status = RunStatus::Completed;
         } else {

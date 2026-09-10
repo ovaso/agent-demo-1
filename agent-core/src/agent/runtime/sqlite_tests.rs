@@ -224,3 +224,48 @@ fn active_graph_context_is_restored_without_polluting_session_projection() {
         "node done"
     );
 }
+
+#[test]
+fn delegated_agent_keeps_its_scope_and_spent_budget_after_reopen() {
+    use crate::agent::delegation::AgentSpec;
+    let db = Database::new();
+    let (mut first, count) = runtime(db.open(), vec![Ok(batch(&["once"]))]);
+    first
+        .start("run", "session", "go", Context::new(), RunLimits::new(3))
+        .unwrap();
+    first
+        .delegate(
+            "run",
+            AgentSpec {
+                name: "worker".into(),
+                instruction: "work".into(),
+                acceptance: vec!["checked".into()],
+                tools: Some(vec!["count".into()]),
+                max_steps: 2,
+                depends_on: vec![],
+            },
+        )
+        .unwrap();
+    for _ in 0..3 {
+        first.advance("run", &mut |_| {}).unwrap();
+    }
+    first.pause("run").unwrap();
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+    drop(first);
+    let (mut second, count) = runtime(
+        db.open(),
+        vec![
+            Ok(ModelResponse::text("worker done")),
+            Ok(ModelResponse::text("root done")),
+        ],
+    );
+    let state = second.resume("run", &mut |_| {}).unwrap();
+    assert_eq!(count.load(Ordering::SeqCst), 0);
+    let policy = state.graph().current().unwrap().nodes["worker"]
+        .policy
+        .as_ref()
+        .unwrap();
+    assert_eq!(policy.model_calls, 2);
+    assert_eq!(policy.tools, vec!["count"]);
+    assert_eq!(state.budget().model_calls(), 3);
+}

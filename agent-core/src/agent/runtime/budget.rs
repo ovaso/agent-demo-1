@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 /// 根任务的硬上限；恢复使用已保存的配置。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunLimits {
+    #[serde(default = "default_delegations")]
+    pub max_delegations: usize,
     pub max_steps: u64,
     pub max_tool_calls: u64,
     pub max_transitions: u64,
@@ -16,6 +18,7 @@ pub struct RunLimits {
 impl Default for RunLimits {
     fn default() -> Self {
         Self {
+            max_delegations: default_delegations(),
             max_steps: 8,
             max_tool_calls: 256,
             max_transitions: 4096,
@@ -37,6 +40,7 @@ impl RunLimits {
 
     pub(crate) fn validate(&self) -> Result<(), RuntimeError> {
         if self.max_steps == 0
+            || self.max_delegations == 0
             || self.max_tool_calls == 0
             || self.max_transitions == 0
             || self.max_calls_per_response == 0
@@ -48,6 +52,10 @@ impl RunLimits {
         }
         Ok(())
     }
+}
+
+fn default_delegations() -> usize {
+    8
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

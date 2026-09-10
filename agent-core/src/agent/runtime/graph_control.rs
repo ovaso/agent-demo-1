@@ -61,20 +61,29 @@ pub(super) fn request_route(
 }
 
 pub(super) fn apply_route(state: &mut RunState) -> Result<(), RuntimeError> {
-    if state.intent == WorkIntent::PlanOnly
-        || state.phase != LoopPhase::Model
-        || !state.pending.is_empty()
-    {
+    if state.phase != LoopPhase::Model || !state.pending.is_empty() {
         return Ok(());
     }
     let Some((mode, reason)) = state.routing.pending.clone() else {
         return Ok(());
     };
+    if state.intent == WorkIntent::PlanOnly && mode == ExecutionMode::Graph {
+        return Ok(());
+    }
     if mode == state.routing.mode {
+        if mode == ExecutionMode::Loop
+            && state.graph.active.is_some()
+            && state.agent_policy().is_some()
+        {
+            super::graph_execution::finish_node(state, NodeStatus::NeedsCoordinator, None, None)?;
+        }
         state.routing.pending = None;
         return Ok(());
     }
     if mode == ExecutionMode::Graph {
+        if state.graph.has_open_delegations() {
+            return Ok(());
+        }
         let plan = state
             .plans
             .current()
@@ -82,8 +91,14 @@ pub(super) fn apply_route(state: &mut RunState) -> Result<(), RuntimeError> {
         state
             .graph
             .bind(state.plans.revision(), plan, state.work_revision)?;
+        state.graph.current_mut().expect("bound graph").engaged = true;
     } else if state.graph.active.is_some() {
-        super::graph_execution::finish_node(state, NodeStatus::Paused, None, None)?;
+        let status = if state.agent_policy().is_some() {
+            NodeStatus::NeedsCoordinator
+        } else {
+            NodeStatus::Paused
+        };
+        super::graph_execution::finish_node(state, status, None, None)?;
     }
     state.routing.history.push(RouteChange {
         from: state.routing.mode,
@@ -101,32 +116,53 @@ pub(super) fn request_node(state: &mut RunState, id: &str) -> Result<(), Runtime
     if state.requested_node.is_some() {
         return Err(RuntimeError::Invalid("已有节点排队，请等待其调度".into()));
     }
-    if state.intent == WorkIntent::PlanOnly || state.graph.active.is_some() {
+    if state.graph.active.is_some() {
         return Err(RuntimeError::Invalid("只能由执行中的协调者选择节点".into()));
     }
-    let plan = state
-        .plans
-        .current()
-        .ok_or_else(|| RuntimeError::Invalid("尚无计划".into()))?;
-    state
+    if !state
         .graph
-        .bind(state.plans.revision(), plan, state.work_revision)?;
-    let graph = state.graph.current().expect("bound graph");
+        .current()
+        .is_some_and(|run| run.nodes.contains_key(id))
+    {
+        let plan = state
+            .plans
+            .current()
+            .ok_or_else(|| RuntimeError::Invalid("尚无工作节点或计划".into()))?;
+        state
+            .graph
+            .bind(state.plans.revision(), plan, state.work_revision)?;
+    }
+    let graph = state
+        .graph
+        .current()
+        .ok_or_else(|| RuntimeError::Invalid("尚无图".into()))?;
     let node = graph
         .nodes
         .get(id)
         .ok_or_else(|| RuntimeError::NotFound(id.into()))?;
-    if !matches!(node.status, NodeStatus::Pending | NodeStatus::Paused)
-        || !node.task.depends_on.iter().all(|id| {
-            graph
-                .nodes
-                .get(id)
-                .is_some_and(|node| node.status == NodeStatus::Succeeded)
-        })
+    if state.intent == WorkIntent::PlanOnly
+        && node.origin == super::super::delegation::NodeOrigin::Planned
     {
+        return Err(RuntimeError::Invalid(
+            "只规划模式不能启动执行计划节点".into(),
+        ));
+    }
+    if !matches!(
+        node.status,
+        NodeStatus::Pending | NodeStatus::Paused | NodeStatus::NeedsCoordinator
+    ) || !node.task.depends_on.iter().all(|id| {
+        graph
+            .nodes
+            .get(id)
+            .is_some_and(|node| node.status == NodeStatus::Succeeded)
+    }) {
         return Err(RuntimeError::Invalid("节点尚未就绪或已经结束".into()));
     }
+    let planned = node.origin == super::super::delegation::NodeOrigin::Planned;
     state.requested_node = Some(id.into());
+    if planned {
+        state.graph.current_mut().expect("graph").engaged = true;
+    }
     Ok(())
 }
 

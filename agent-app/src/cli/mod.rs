@@ -105,8 +105,17 @@ fn print_status(state: &RunState) {
 
 fn print_graph(state: &RunState) {
     if let Some(graph) = state.graph().current() {
-        println!("图计划 v{}", graph.plan_version);
+        println!(
+            "工作节点，计划版本 {}，图调度启用：{}",
+            graph.plan_version,
+            graph.is_engaged()
+        );
         for (id, node) in &graph.nodes {
+            if !graph.is_engaged()
+                && node.origin == agent_core::agent::delegation::NodeOrigin::Planned
+            {
+                continue;
+            }
             println!(
                 "  [{id}] {:?}，尝试 {}，验收依据 {:?}\n    {}",
                 node.status, node.attempts, node.validation, node.task.description
@@ -114,6 +123,19 @@ fn print_graph(state: &RunState) {
         }
     } else {
         println!("尚未启动图执行。");
+    }
+}
+
+fn print_agents(state: &RunState) {
+    if let Some(graph) = state.graph().current() {
+        for (id, node) in &graph.nodes {
+            if let Some(policy) = &node.policy {
+                println!(
+                    "  {id}：{:?}，模型步数 {}/{}，业务工具范围 {:?}",
+                    node.status, policy.model_calls, policy.max_steps, policy.tools
+                );
+            }
+        }
     }
 }
 
@@ -147,6 +169,9 @@ fn help() {
   /mode [loop|graph]    查看或选择执行方式
   /graph               查看图节点状态
   /retry-node <节点ID>  明确重试已知失败节点，随后 /resume
+  /agents              查看子 Agent 状态、工具范围与预算
+  /agent-budget <ID> <步数>  调整子 Agent 累计额度
+  /cancel-agent <ID>   取消子任务，保留记录和用量
   /status [运行 ID]     查看状态、预算和最终结果
   /resume [运行 ID]     恢复执行，沿用原预算
   /step [运行 ID]       推进一个阶段（暂停后需 /resume）

@@ -68,6 +68,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         context.push_user(input);
         super::store::bounded_json(&context, limits.max_context_bytes)?;
         let state = RunState {
+            delegations_created: 0,
             graph: Default::default(),
             routing: Default::default(),
             requested_node: None,

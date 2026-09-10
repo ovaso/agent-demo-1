@@ -43,6 +43,8 @@ pub enum LoopPhase {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunState {
     #[serde(default)]
+    pub(crate) delegations_created: usize,
+    #[serde(default)]
     pub(crate) graph: super::super::graph::GraphState,
     #[serde(default)]
     pub(crate) routing: super::super::routing::RoutingState,
@@ -81,6 +83,27 @@ pub struct RunState {
 }
 
 impl RunState {
+    pub fn actor(&self) -> String {
+        self.graph
+            .active_node()
+            .map_or_else(|| "main".into(), |id| format!("node/{id}"))
+    }
+    pub(crate) fn agent_policy(&self) -> Option<&super::super::delegation::AgentPolicy> {
+        self.graph
+            .current()?
+            .nodes
+            .get(self.graph.active_node()?)?
+            .policy
+            .as_ref()
+    }
+    pub(crate) fn tool_allowed(&self, name: &str) -> bool {
+        self.tools.iter().any(|tool| {
+            tool.name() == name
+                && (self.intent != super::WorkIntent::PlanOnly || tool.is_read_only())
+        }) && self
+            .agent_policy()
+            .is_none_or(|policy| policy.tools.iter().any(|tool| tool == name))
+    }
     /// 读取活动或历史节点上下文，解析跨版本结果引用。
     pub fn node_context(&self, mut version: u64, id: &str) -> Option<&Context> {
         for _ in 0..16 {

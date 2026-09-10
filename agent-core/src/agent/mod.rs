@@ -1,6 +1,7 @@
 //! Agent 的配置、结果与执行循环。
 
 pub mod blackboard;
+pub mod delegation;
 pub mod graph;
 mod model_step;
 pub mod planning;

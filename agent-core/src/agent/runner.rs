@@ -120,6 +120,7 @@ where
             &mut agent.trace_sink,
             trace,
             super::model_step::ModelStep {
+                actor: "main",
                 request,
                 session_id,
                 step,

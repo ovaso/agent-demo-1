@@ -95,7 +95,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             if state.routing.mode == ExecutionMode::Graph {
                 state.graph.ready().map(str::to_owned)
             } else {
-                None
+                state.graph.ready_delegation().map(str::to_owned)
             }
         });
         if let Some(id) = id {
@@ -117,7 +117,10 @@ fn start_node(state: &mut RunState, id: &str) -> Result<(), RuntimeError> {
         .nodes
         .get_mut(id)
         .ok_or_else(|| RuntimeError::NotFound(id.into()))?;
-    if !matches!(node.status, NodeStatus::Pending | NodeStatus::Paused) {
+    if !matches!(
+        node.status,
+        NodeStatus::Pending | NodeStatus::Paused | NodeStatus::NeedsCoordinator
+    ) {
         return Err(RuntimeError::Invalid("节点不可执行".into()));
     }
     if node.status == NodeStatus::Pending {

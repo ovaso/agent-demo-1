@@ -10,6 +10,9 @@ pub(super) enum Command<'a> {
     Mode(Option<ExecutionMode>),
     Graph,
     RetryNode(&'a str),
+    Agents,
+    AgentBudget(&'a str, u64),
+    CancelAgent(&'a str),
     Help,
     Trace,
     Reset,
@@ -46,6 +49,22 @@ pub(super) fn parse(input: &str) -> Result<Command<'_>, String> {
             _ => return Err("用法：/mode [loop|graph]".into()),
         })),
         "/graph" if rest.is_empty() => Ok(Command::Graph),
+        "/agents" if rest.is_empty() => Ok(Command::Agents),
+        "/agent-budget" => {
+            let (node, value) = split(rest);
+            let max_steps = value
+                .parse()
+                .ok()
+                .filter(|value| *value > 0)
+                .ok_or("用法：/agent-budget <节点ID> <累计步数上限>")?;
+            if node.is_empty() {
+                return Err("缺少节点 ID".into());
+            }
+            Ok(Command::AgentBudget(node, max_steps))
+        }
+        "/cancel-agent" if !rest.is_empty() => {
+            Ok(Command::CancelAgent(optional_id(rest)?.expect("nonempty")))
+        }
         "/retry-node" if !rest.is_empty() => {
             Ok(Command::RetryNode(optional_id(rest)?.expect("nonempty")))
         }

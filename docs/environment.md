@@ -41,6 +41,16 @@ RS_AGENT_ENV_FILE=.env.production cargo run -p agent-app
 
 显式指定的文件必须存在。只读取这一份文件，不与默认 `.env` 叠加，也不向父目录搜索。文件选择变量只从进程环境读取，不通过文件内容递归加载其他文件。所有相对路径仍以启动时的工作目录为准，选择其他目录的环境文件不会改变工作目录。
 
+## 调试工具
+
+使用 `cargo run -p agent-app -- --mode=debug`（或 `./target/release/agent-app --mode=debug`）启动后，可让模型调用无参数只读工具 `debug_show_config` 查看配置。普通启动不注册该工具；环境变量不能开启调试工具。该启动参数单独使用，不与 `--status`、`--trace-map` 组合，也不同于会话内切换执行方式的 `/mode`。
+
+工具按 `KEY=VALUE` 返回本次启动解析后的配置，包含当前 provider 的模型、实际 base URL、OpenAI stream usage 或 Anthropic max tokens，以及步数、委派上限、数据库、记忆目录、会话和追踪路径。默认值和布尔值按实际生效结果展示；自动扩展关闭时，三个扩展参数显示 `<disabled>`。只输出明确列出的配置字段，不枚举环境变量，不输出 API key。
+
+这是启动配置快照：运行中修改 `.env`、通过 `/budget` 调整任务或恢复旧任务，不会改变工具结果；当前任务预算以 `/status` 为准。工具实现与统一注册入口位于 `agent-tool-debug` crate，配置快照在 `agent-app/src/config/debug.rs` 组装，后续调试工具放入同一 crate，标注 `#[tool(group = "debug")]` 后由其入口按组自动注册。该 crate 直接依赖关闭默认 features 的 `agent-core`；宏选项、状态注入和自动发现说明见[工具开发](tool-development.md)。
+
+调试工具首次实现验证：新增 1 项工具单元测试和 5 项本地 mock CLI 测试，覆盖注册开关、非法参数、配置覆盖、默认值、关闭扩展、敏感字段排除、Anthropic、Plan Mode 只读调用及启动快照。通过 `cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`cargo test -p agent-core --no-default-features`（67 项）和 `cargo build --release -p agent-app --locked`。同一 `rustc 1.96.1`、`aarch64-apple-darwin`、默认 features 和 release 命令下，主可执行文件由 6,175,424 增至 6,193,168 字节，增加 17,744 字节（约 0.29%）。普通模式不创建配置快照；未测量运行耗时变化。
+
 ## 解析与生效时间
 
 支持 UTF-8（含 BOM）、`KEY=VALUE`、注释、可选 `export`、单/双引号、多行值与 dotenv 变量引用。单引号用于保留 `$` 等字面内容；变量引用可使用进程变量和文件中此前定义的变量。重复变量、NUL、格式错误、非普通文件会报错；错误仅给出文件和位置附近信息，不回显原始配置行或密钥。

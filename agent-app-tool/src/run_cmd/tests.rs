@@ -1,11 +1,11 @@
-use agent_core::tool::Registry;
+use agent_core::tool::{Arguments, Registry, Tool};
 use serde_json::{Value, json};
 
 use super::*;
 
 fn invoke(cmd: &str, args: Value) -> Result<Value, String> {
     let mut registry = Registry::new();
-    registry.register(RunCmd::new()).unwrap();
+    registry.register(run_cmd_tool()).unwrap();
     let output = registry
         .invoke(
             "run_cmd",
@@ -25,12 +25,12 @@ fn runs_each_allowed_program_in_working_directory() {
         (
             "rg",
             json!(["--no-config", "--color=never", "^name =", "Cargo.toml"]),
-            "name = \"agent-app\"\n",
+            "name = \"agent-app-tool\"\n",
         ),
         (
             "grep",
             json!(["^name =", "Cargo.toml"]),
-            "name = \"agent-app\"\n",
+            "name = \"agent-app-tool\"\n",
         ),
         ("sed", json!(["-n", "1p", "Cargo.toml"]), "[package]\n"),
         (
@@ -70,7 +70,7 @@ fn rejects_non_allowlisted_names_paths_and_shell_commands() {
 
 #[test]
 fn rejects_malformed_arguments_and_invalid_directories() {
-    let tool = RunCmd::new();
+    let tool = run_cmd_tool();
     for args in ["", "null", "{}", "[1]", "[null]", "\"pattern\""] {
         let error = tool
             .invoke(&Arguments::new().with("cmd", "grep").with("args", args))
@@ -120,7 +120,7 @@ fn passes_shell_metacharacters_and_spaces_literally() {
 
 #[test]
 fn closes_stdin_and_defaults_to_current_directory() {
-    let output = RunCmd::new()
+    let output = run_cmd_tool()
         .invoke(
             &Arguments::new()
                 .with("cmd", "sed")

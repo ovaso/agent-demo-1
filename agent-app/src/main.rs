@@ -5,7 +5,6 @@ mod config;
 mod output;
 mod provider;
 mod terminal;
-mod tools;
 mod trace_map;
 
 fn main() {
@@ -39,11 +38,13 @@ fn run() -> Result<(), Box<dyn Error>> {
         trace_map::show(path, &mut io::stdout().lock())?;
         return Ok(());
     }
-    if command.is_some() {
-        return Err("支持的参数：--status [运行 ID]、--trace-map [文件]".into());
+    let debug = command.as_deref() == Some(std::ffi::OsStr::new("--mode=debug"));
+    if (command.is_some() && !debug) || args.next().is_some() {
+        return Err("支持的参数：--mode=debug、--status [运行 ID]、--trace-map [文件]".into());
     }
     let model = config::model_provider(&environment)?;
     let runtime = config::RuntimeConfig::from_environment(&environment)?;
+    let debug_snapshot = debug.then(|| config::debug_snapshot(&environment, &model, &runtime));
     drop(environment);
-    cli::run(model, runtime)
+    cli::run(model, runtime, debug_snapshot)
 }

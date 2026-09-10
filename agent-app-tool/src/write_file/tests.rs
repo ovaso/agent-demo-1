@@ -3,7 +3,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use agent_core::tool::Registry;
+use agent_core::tool::{Arguments, Registry};
 
 use super::*;
 
@@ -41,7 +41,7 @@ impl Drop for TestDirectory {
 
 fn registry() -> Registry {
     let mut registry = Registry::new();
-    registry.register(WriteFile::new()).unwrap();
+    registry.register(write_file_tool()).unwrap();
     registry
 }
 

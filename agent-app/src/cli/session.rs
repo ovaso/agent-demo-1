@@ -26,18 +26,18 @@ pub(super) struct Session<M> {
 }
 
 impl<M: ModelProvider> Session<M> {
-    pub(super) fn new(model: M, config: RuntimeConfig) -> Result<Self, Box<dyn Error>> {
+    pub(super) fn new(
+        model: M,
+        config: RuntimeConfig,
+        debug_snapshot: Option<String>,
+    ) -> Result<Self, Box<dyn Error>> {
         let store = SqliteRunStore::open(config.db_path)?;
         let memory = MarkdownMemoryStore::open(config.memory_directory)?;
         let mut tools = Registry::new();
-        tools.register(crate::tools::echo_tool())?;
-        tools.register(crate::tools::session_finish_tool())?;
-        tools.register(crate::tools::WriteFile::new())?;
-        tools.register(crate::tools::RunCmd::new())?;
-        tools.register(crate::tools::ReadFile::new())?;
-        tools.register(crate::tools::ListDirectory::new())?;
-        tools.register(crate::tools::SearchFiles::new())?;
-        tools.register(crate::tools::RunCheck::new())?;
+        agent_app_tool::register(&mut tools)?;
+        if let Some(snapshot) = debug_snapshot {
+            agent_tool_debug::register(&mut tools, snapshot)?;
+        }
         let runtime = Runtime::new(model, store, memory, tools)
             .with_trace_sink(FileTraceSink::open(&config.trace_path)?);
         Ok(Self {

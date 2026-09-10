@@ -19,6 +19,8 @@ mod graph_tests;
 mod memory_input;
 mod message_delivery;
 mod message_tools;
+#[cfg(test)]
+mod metadata_tests;
 mod model_execution;
 mod model_input;
 mod options;

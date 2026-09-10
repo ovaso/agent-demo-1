@@ -59,6 +59,14 @@ impl AnthropicProvider {
         Ok(self)
     }
 
+    pub(crate) fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
+    pub(crate) fn max_tokens(&self) -> u32 {
+        self.max_tokens
+    }
+
     fn request_body(&self, request: &ModelRequest<'_>) -> Result<Value, ModelError> {
         super::continuation::validate(
             request,

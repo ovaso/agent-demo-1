@@ -11,7 +11,9 @@ math = ["agent-render-cmd/math"]
 [dependencies]
 dotenvy = { version = "0.15.7", default-features = false }
 agent-core = { path = "../agent-core", features = ["sqlite"] }
+agent-app-tool = { path = "../agent-app-tool" }
 agent-render-cmd = { path = "../agent-render-cmd" }
+agent-tool-debug = { path = "../agent-tool-debug" }
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }
 rustyline = "18"
 serde = { version = "1.0", features = ["derive"] }

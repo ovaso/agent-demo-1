@@ -168,6 +168,23 @@ pub fn exchange(mut stream: TcpStream, provider: Provider, step: &Step) -> Value
     let request: Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(request["model"], "test-model");
     assert_eq!(request["stream"], true);
+    let tool_names: Vec<_> = request["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|tool| {
+            tool["name"]
+                .as_str()
+                .or_else(|| tool["function"]["name"].as_str())
+                .unwrap()
+        })
+        .collect();
+    assert!(
+        tool_names
+            .windows(2)
+            .all(|names| tool_sort_key(names[0]) < tool_sort_key(names[1])),
+        "tool definitions must be sorted by introduction and name: {tool_names:?}"
+    );
     assert_eq!(overview(&request)["actor"], step.actor);
     drop(reader);
     let response = step.response(provider);
@@ -202,4 +219,30 @@ pub fn has_tool(request: &Value, name: &str) -> bool {
     request["tools"].as_array().unwrap().iter().any(|tool| {
         tool["name"].as_str() == Some(name) || tool["function"]["name"].as_str() == Some(name)
     })
+}
+
+fn tool_sort_key(name: &str) -> (u64, &str) {
+    let created_at = match name {
+        "echo" | "session_finish" => 1788784117,
+        "run_cmd" | "write_file" => 1788951445,
+        "list_directory"
+        | "read_file"
+        | "search_files"
+        | "runtime_plan"
+        | "runtime_plan_ready"
+        | "runtime_board_read"
+        | "runtime_board_write" => 1789006513,
+        "run_check" | "runtime_route" | "runtime_run_node" | "runtime_retry_node" => 1789008818,
+        "runtime_delegate"
+        | "runtime_agents"
+        | "runtime_agent_budget"
+        | "runtime_cancel_agent"
+        | "runtime_result" => 1789010818,
+        "runtime_send" | "runtime_ask" | "runtime_reply" | "runtime_wait" | "runtime_inbox" => {
+            1789013643
+        }
+        "debug_show_config" => 1789028730,
+        _ => panic!("add the new tool's introduction date to this contract: {name}"),
+    };
+    (created_at, name)
 }

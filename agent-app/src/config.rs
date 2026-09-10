@@ -3,8 +3,10 @@ use crate::provider::{AnthropicProvider, ConfiguredProvider, OpenAiCompatiblePro
 use agent_core::agent::runtime::{RunLimits, StepExtensionPolicy};
 use std::{env, error::Error};
 
+mod debug;
 mod environment;
 mod prompt;
+pub(crate) use debug::debug_snapshot;
 pub(crate) use environment::Environment;
 
 pub(crate) struct RuntimeConfig {

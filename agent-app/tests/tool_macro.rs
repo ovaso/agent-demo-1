@@ -3,17 +3,17 @@ use agent_core::{
     tool::{Arguments, Registry},
 };
 
-#[tool]
+#[tool(created_at = 1788784117, version = "v1.0.0-20260910")]
 fn add(left: i64, right: i64) -> i64 {
     left + right
 }
 
-#[tool(name = "welcome")]
+#[tool(created_at = 1788784117, version = "v1.0.0-20260910", name = "welcome")]
 fn greet(name: String) -> String {
     format!("你好，{name}")
 }
 
-#[tool(finish_session)]
+#[tool(created_at = 1788784117, version = "v1.0.0-20260910", finish_session)]
 fn finish(summary: String) -> String {
     summary
 }

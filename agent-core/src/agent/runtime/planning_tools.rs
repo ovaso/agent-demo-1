@@ -21,12 +21,12 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
                 Parameter::required("expected_revision", "首次为 0，修订时为当前计划版本"),
                 Parameter::required("plan", "计划 JSON 字符串"),
             ],
-        ),
+        ).with_metadata(1789006513, "v1.0.0-20260910"),
         ToolDefinition::new(
             "runtime_board_write",
             "写入带版本的共享记录，不能将模型意见标记为程序验证。update JSON 含 key、expected_revision（首次 0）、kind（observation/hypothesis/decision/blocker/artifact）、content、sources（可选，每项 uri 和 version）。作者由运行时指定。子Agent使用自己的key，只能更新自己的条目；共享decision由协调者发布。",
             vec![Parameter::required("update", "共享记录更新 JSON 字符串")],
-        ),
+        ).with_metadata(1789006513, "v1.0.0-20260910"),
         ToolDefinition::new(
             "runtime_board_read",
             "读取共享记录。指定 key 可查询一条，revision 可读历史版本；否则 after 为变更游标，返回有界的最新记录及 next_cursor。",
@@ -35,12 +35,12 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
                 Parameter::optional("revision", "指定记录的历史版本"),
                 Parameter::optional("after", "变更游标，默认 0"),
             ],
-        ),
+        ).with_metadata(1789006513, "v1.0.0-20260910"),
         ToolDefinition::new(
             "runtime_plan_ready",
             "只规划模式下交付当前已保存计划，暂停等待用户执行。调用后的本批其余工具不执行。",
             vec![],
-        ),
+        ).with_metadata(1789006513, "v1.0.0-20260910"),
         ToolDefinition::new(
             "runtime_route",
             "选择 loop 或 graph；Graph 需要已有计划，批次结束后切换。节点内切回 Loop 会保存节点并交回协调者，剩余任务仍需完成。",
@@ -48,17 +48,17 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
                 Parameter::required("mode", "loop 或 graph"),
                 Parameter::required("reason", "路由原因"),
             ],
-        ),
+        ).with_metadata(1789008818, "v1.0.0-20260910"),
         ToolDefinition::new(
             "runtime_run_node",
             "协调者选择一个依赖已满足的节点执行；Loop 模式也可使用。",
             vec![Parameter::required("node", "任务 ID")],
-        ),
+        ).with_metadata(1789008818, "v1.0.0-20260910"),
         ToolDefinition::new(
             "runtime_retry_node",
             "重试已知失败的只读或验证节点，每节点最多 3 次；普通写入节点需操作者明确重试。",
             vec![Parameter::required("node", "任务 ID")],
-        ),
+        ).with_metadata(1789008818, "v1.0.0-20260910"),
     ];
     tools.extend(super::agent_tools::definitions());
     tools.extend(super::message_tools::definitions());

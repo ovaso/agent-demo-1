@@ -35,16 +35,22 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         let mut state = self.state(id)?;
         Self::check_editable(&state)?;
         let definitions = self.tools.definitions();
-        if self.model.model_name() != state.model_name
-            || state.tools.iter().any(|saved| {
-                definitions
-                    .iter()
-                    .find(|current| current.name() == saved.name())
-                    != Some(saved)
-            })
-        {
+        if self.model.model_name() != state.model_name {
             return Err(RuntimeError::Invalid("模型或工具定义与检查点不一致".into()));
         }
+        // Preserve the saved capability set. Source metadata can be backfilled
+        // or refreshed without granting tools or relaxing executable contracts.
+        for saved in &mut state.tools {
+            let current = definitions
+                .iter()
+                .find(|current| current.name() == saved.name())
+                .filter(|current| saved.same_contract(current))
+                .ok_or_else(|| RuntimeError::Invalid("模型或工具定义与检查点不一致".into()))?;
+            saved.refresh_metadata(current);
+        }
+        state
+            .tools
+            .sort_unstable_by(|left, right| left.sort_key().cmp(&right.sort_key()));
         if state.status == RunStatus::Paused(PauseReason::PlanReady) {
             return Ok(state);
         }

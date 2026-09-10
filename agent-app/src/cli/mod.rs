@@ -15,8 +15,9 @@ mod view;
 pub(crate) fn run<M: ModelProvider>(
     model: M,
     config: config::RuntimeConfig,
+    debug_snapshot: Option<String>,
 ) -> Result<(), Box<dyn Error>> {
-    let mut session = session::Session::new(model, config)?;
+    let mut session = session::Session::new(model, config, debug_snapshot)?;
     println!("rs-agent 已启动。Enter 发送，Ctrl+J / Alt+Enter 换行。输入 /help 查看命令。");
     if let Some(state) = session.runtime.store().latest(&session.session_id)?
         && !matches!(state.status(), RunStatus::Completed | RunStatus::Cancelled)

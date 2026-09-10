@@ -79,6 +79,14 @@ impl OpenAiCompatibleProvider {
         Ok(self)
     }
 
+    pub(crate) fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
+    pub(crate) fn stream_usage(&self) -> bool {
+        self.stream_usage
+    }
+
     fn request_body(&self, request: &ModelRequest<'_>) -> Result<Value, ModelError> {
         super::continuation::validate(
             request,

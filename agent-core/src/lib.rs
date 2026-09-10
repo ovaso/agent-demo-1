@@ -12,5 +12,7 @@ pub mod tool;
 pub mod trace;
 
 pub use agent_tool_macro::tool;
+#[doc(hidden)]
+pub use inventory;
 pub use serde;
 pub use serde_json;

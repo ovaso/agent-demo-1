@@ -19,12 +19,12 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
             "runtime_delegate",
             "协调者创建独立 Agent，批次结算后顺序调度；支持 Loop 模式，无需先创建计划图。spec JSON 含 name、instruction、acceptance 字符串数组，tools 可选工具名数组，max_steps 默认4且不超过根总额度，depends_on 可选工作节点ID数组。子 Agent 不能递归创建其他 Agent。",
             vec![Parameter::required("spec", "委托 JSON 字符串")],
-        ),
+        ).with_metadata(1789010818, "v1.0.0-20260910"),
         ToolDefinition::new(
             "runtime_agents",
             "列出本任务工作节点、联系地址、状态、局部预算与结果摘要。",
             vec![],
-        ),
+        ).with_metadata(1789010818, "v1.0.0-20260910"),
         ToolDefinition::new(
             "runtime_agent_budget",
             "协调者调整子 Agent 的累计模型步数上限；不清零用量，不增加根任务额度。",
@@ -32,12 +32,12 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
                 Parameter::required("node", "工作节点 ID"),
                 Parameter::required("max_steps", "新的累计局部上限"),
             ],
-        ),
+        ).with_metadata(1789010818, "v1.0.0-20260910"),
         ToolDefinition::new(
             "runtime_cancel_agent",
             "协调者取消不再需要的子任务，保留结果和用量。",
             vec![Parameter::required("node", "工作节点 ID")],
-        ),
+        ).with_metadata(1789010818, "v1.0.0-20260910"),
         ToolDefinition::new(
             "runtime_result",
             "读取本任务节点的有界结果片段，包括历史计划版本，避免共享整个对话。",
@@ -46,7 +46,7 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
                 Parameter::optional("version", "计划版本，默认当前"),
                 Parameter::optional("offset", "结果字节偏移，默认0"),
             ],
-        ),
+        ).with_metadata(1789010818, "v1.0.0-20260910"),
     ]
 }
 

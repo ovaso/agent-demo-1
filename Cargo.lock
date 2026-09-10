@@ -12,8 +12,10 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 name = "agent-app"
 version = "0.1.0"
 dependencies = [
+ "agent-app-tool",
  "agent-core",
  "agent-render-cmd",
+ "agent-tool-debug",
  "dotenvy",
  "reqwest",
  "rustyline",
@@ -24,10 +26,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent-app-tool"
+version = "0.1.0"
+dependencies = [
+ "agent-core",
+ "serde_json",
+]
+
+[[package]]
 name = "agent-core"
 version = "0.1.0"
 dependencies = [
  "agent-tool-macro",
+ "inventory",
  "rusqlite",
  "serde",
  "serde_json",
@@ -45,6 +56,13 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width",
  "vt100",
+]
+
+[[package]]
+name = "agent-tool-debug"
+version = "0.1.0"
+dependencies = [
+ "agent-core",
 ]
 
 [[package]]
@@ -668,6 +686,15 @@ checksum = "cb68373c0d6620ef8105e855e7745e18b0d00d3bdb07fb532e434244cdb9a714"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "inventory"
+version = "0.3.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4f0c30c76f2f4ccee3fe55a2435f691ca00c0e4bd87abe4f4a851b1d4dac39b"
+dependencies = [
+ "rustversion",
 ]
 
 [[package]]

@@ -1,6 +1,14 @@
 //! Agent 工具定义与运行时注册表。
 
+mod automatic;
+mod definition;
+pub use definition::{Parameter, ToolDefinition};
+#[doc(hidden)]
+pub mod invocation;
 mod registry;
+
+#[doc(hidden)]
+pub use automatic::ToolRegistration;
 
 use std::{
     collections::BTreeMap,
@@ -11,90 +19,6 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 pub use registry::{Registry, RegistryError};
-
-/// 描述工具接受的一个输入参数。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Parameter {
-    name: String,
-    description: String,
-    required: bool,
-}
-
-impl Parameter {
-    pub fn required(name: impl Into<String>, description: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            description: description.into(),
-            required: true,
-        }
-    }
-
-    pub fn optional(name: impl Into<String>, description: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            description: description.into(),
-            required: false,
-        }
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn description(&self) -> &str {
-        &self.description
-    }
-
-    pub fn is_required(&self) -> bool {
-        self.required
-    }
-}
-
-/// LLM 选择和调用工具所需的元数据。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ToolDefinition {
-    name: String,
-    description: String,
-    parameters: Vec<Parameter>,
-    #[serde(default)]
-    read_only: bool,
-}
-
-impl ToolDefinition {
-    pub fn new(
-        name: impl Into<String>,
-        description: impl Into<String>,
-        parameters: Vec<Parameter>,
-    ) -> Self {
-        Self {
-            name: name.into(),
-            description: description.into(),
-            parameters,
-            read_only: false,
-        }
-    }
-
-    pub fn with_read_only(mut self, read_only: bool) -> Self {
-        self.read_only = read_only;
-        self
-    }
-
-    pub fn is_read_only(&self) -> bool {
-        self.read_only
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn description(&self) -> &str {
-        &self.description
-    }
-
-    pub fn parameters(&self) -> &[Parameter] {
-        &self.parameters
-    }
-}
 
 /// 调用工具时传入的参数值。
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -230,12 +154,18 @@ pub trait Tool: Send + Sync {
         false
     }
 
+    /// Fixed first-introduction Unix timestamp. Zero is reserved for legacy tools.
+    fn created_at(&self) -> u64 {
+        0
+    }
+    /// Reference version only; does not affect ordering or execution permissions.
+    fn version(&self) -> &str {
+        ""
+    }
+
     fn definition(&self) -> ToolDefinition {
-        ToolDefinition {
-            name: self.name().to_owned(),
-            description: self.description().to_owned(),
-            parameters: self.parameters().to_vec(),
-            read_only: self.is_read_only(),
-        }
+        ToolDefinition::new(self.name(), self.description(), self.parameters().to_vec())
+            .with_metadata(self.created_at(), self.version())
+            .with_read_only(self.is_read_only())
     }
 }

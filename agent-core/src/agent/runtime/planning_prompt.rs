@@ -38,6 +38,9 @@ pub(super) fn request_context(
             messages.insert(1, Message::system("已获准额度用尽时，运行时仅根据近期新进展在硬上限内有限续期，不保证一定获得更多步数。预算数据含剩余硬额度和续期次数，接近硬上限时优先收敛结果并说明未完成事项；重复读取、失败调用和状态轮询不能换取更多额度。"));
         }
     }
+    // Runtime capabilities use their own dispatch path, but the combined model
+    // schema must have a stable order independent of group registration order.
+    tools.sort_unstable_by(|left, right| left.sort_key().cmp(&right.sort_key()));
     super::serialization::check(&messages, state.limits.max_context_bytes)?;
     Ok((messages, tools))
 }

@@ -9,7 +9,7 @@ use super::{Arguments, Parameter, Tool, ToolDefinition, ToolError, ToolOutput};
 /// 存放具名工具，并将通过校验的调用路由给对应工具。
 #[derive(Default)]
 pub struct Registry {
-    tools: BTreeMap<String, Box<dyn Tool>>,
+    pub(super) tools: BTreeMap<String, Box<dyn Tool>>,
 }
 
 impl Registry {
@@ -22,20 +22,26 @@ impl Registry {
     where
         T: Tool + 'static,
     {
+        self.register_boxed(Box::new(tool))
+    }
+
+    pub(super) fn register_boxed(&mut self, tool: Box<dyn Tool>) -> Result<(), RegistryError> {
         let name = tool.name().to_owned();
-        validate_definition(&tool)?;
+        validate_definition(tool.as_ref())?;
 
         if self.tools.contains_key(&name) {
             return Err(RegistryError::DuplicateTool { name });
         }
 
-        self.tools.insert(name, Box::new(tool));
+        self.tools.insert(name, tool);
         Ok(())
     }
 
-    /// 按名称顺序返回定义，以保持发送给 LLM 的提示词稳定。
+    /// 按首次加入时间、名称返回定义；版本不参与排序。
     pub fn definitions(&self) -> Vec<ToolDefinition> {
-        self.tools.values().map(|tool| tool.definition()).collect()
+        let mut definitions: Vec<_> = self.tools.values().map(|tool| tool.definition()).collect();
+        definitions.sort_unstable_by(|left, right| left.sort_key().cmp(&right.sort_key()));
+        definitions
     }
 
     pub fn contains(&self, name: &str) -> bool {
@@ -75,13 +81,35 @@ impl Registry {
 #[derive(Debug)]
 pub enum RegistryError {
     EmptyToolName,
-    DuplicateTool { name: String },
-    EmptyParameterName { tool: String },
-    DuplicateParameter { tool: String, parameter: String },
-    ToolNotFound { name: String },
-    MissingArgument { tool: String, parameter: String },
-    UnexpectedArgument { tool: String, parameter: String },
-    Execution { tool: String, source: ToolError },
+    DuplicateTool {
+        name: String,
+    },
+    EmptyParameterName {
+        tool: String,
+    },
+    DuplicateParameter {
+        tool: String,
+        parameter: String,
+    },
+    ToolNotFound {
+        name: String,
+    },
+    MissingArgument {
+        tool: String,
+        parameter: String,
+    },
+    UnexpectedArgument {
+        tool: String,
+        parameter: String,
+    },
+    Execution {
+        tool: String,
+        source: ToolError,
+    },
+    MissingContext {
+        tool: String,
+        expected: &'static str,
+    },
 }
 
 impl Display for RegistryError {
@@ -114,6 +142,9 @@ impl Display for RegistryError {
                 )
             }
             Self::Execution { tool, source } => write!(formatter, "tool `{tool}` failed: {source}"),
+            Self::MissingContext { tool, expected } => {
+                write!(formatter, "tool `{tool}` requires context `{expected}`")
+            }
         }
     }
 }

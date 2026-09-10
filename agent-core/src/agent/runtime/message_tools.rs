@@ -18,7 +18,7 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
                 Parameter::required("to", "接收地址"),
                 Parameter::required("body", "最多2048字节"),
             ],
-        ),
+        ).with_metadata(1789013643, "v1.0.0-20260910"),
         ToolDefinition::new(
             "runtime_ask",
             "发起协作请求。节点默认等待答复并释放执行位置，协调者默认不等待而继续调度；通过 runtime_inbox 读取答复。一次请求在恢复后不会重复投递到上下文。",
@@ -28,7 +28,7 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
                 Parameter::optional("timeout_ms", "1..3600000，默认300000，暂停期间继续计时"),
                 Parameter::optional("wait", "true/false，默认节点true、协调者false"),
             ],
-        ),
+        ).with_metadata(1789013643, "v1.0.0-20260910"),
         ToolDefinition::new(
             "runtime_reply",
             "答复收到的请求，必须使用请求ID。只能以实际接收者身份答复；相同答复重投幂等，不同答复不能覆盖。",
@@ -37,17 +37,17 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
                 Parameter::required("body", "答复或拒绝原因，最多2048字节"),
                 Parameter::optional("decline", "拒绝时true，默认false"),
             ],
-        ),
+        ).with_metadata(1789013643, "v1.0.0-20260910"),
         ToolDefinition::new(
             "runtime_wait",
             "节点等待自己已发出的请求；有界等待并检查循环依赖。协调者使用 inbox 继续调度。",
             vec![Parameter::required("request", "自己发出的请求ID")],
-        ),
+        ).with_metadata(1789013643, "v1.0.0-20260910"),
         ToolDefinition::new(
             "runtime_inbox",
             "读取自己收到的消息和请求答复，按变更游标分页。历史保持持久化，读取不增加模型额度。",
             vec![Parameter::optional("after", "变更游标，默认0")],
-        ),
+        ).with_metadata(1789013643, "v1.0.0-20260910"),
     ]
 }
 

@@ -7,7 +7,7 @@ use crate::{
         planning::Plan,
         routing::ExecutionMode,
     },
-    tool::ToolDefinition,
+    tool::{Parameter, ToolDefinition},
 };
 use serde::Serialize;
 
@@ -20,7 +20,7 @@ struct Overview<'a> {
     agent_budget: Option<&'a AgentPolicy>,
     board_sequence: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
-    execution_tool_definitions: Option<Vec<&'a ToolDefinition>>,
+    execution_tool_definitions: Option<Vec<ToolView<'a>>>,
     goal: &'a str,
     intent: WorkIntent,
     mode: ExecutionMode,
@@ -30,6 +30,27 @@ struct Overview<'a> {
     plan_version: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     step_budget: Option<StepBudgetView<'a>>,
+}
+
+// Source timestamps and reference versions are persisted locally, not repeated
+// in the model prompt. Version-only edits must not change its tool schema text.
+#[derive(Serialize)]
+struct ToolView<'a> {
+    name: &'a str,
+    description: &'a str,
+    parameters: &'a [Parameter],
+    read_only: bool,
+}
+
+impl<'a> From<&'a ToolDefinition> for ToolView<'a> {
+    fn from(tool: &'a ToolDefinition) -> Self {
+        Self {
+            name: tool.name(),
+            description: tool.description(),
+            parameters: tool.parameters(),
+            read_only: tool.is_read_only(),
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -108,6 +129,7 @@ pub(super) fn value(state: &RunState) -> Result<serde_json::Value, RuntimeError>
                     .tools
                     .iter()
                     .filter(|tool| !state.tool_allowed(tool.name()))
+                    .map(ToolView::from)
                     .collect()
             }),
         goal: &state.goal,

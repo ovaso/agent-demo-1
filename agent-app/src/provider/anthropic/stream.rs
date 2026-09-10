@@ -1,75 +1,66 @@
-use super::helpers::{arguments_from_json, required_string};
-use super::usage;
-use agent_core::{
-    model::{ModelError, ModelResponse},
-    tool::ToolCall,
-};
-use serde_json::Value;
-use std::{collections::BTreeMap, io::BufRead};
-#[derive(Default)]
-struct PartialToolCall {
-    id: String,
-    name: String,
-    arguments: String,
-}
+use super::{content::Content, response::parse_response, usage};
+use agent_core::model::{ModelError, ModelResponse};
+use serde_json::{Value, json};
+use std::io::BufRead;
 
 pub(super) fn parse_stream(
     response: impl BufRead,
     on_text_delta: &mut dyn FnMut(&str),
 ) -> Result<ModelResponse, ModelError> {
+    let mut content = Content::default();
     let mut text = String::new();
     let mut usage = usage::Usage::default();
+    let mut model = None;
+    let mut stop = None;
     let mut finished = false;
-    let mut stop = agent_core::model::StopReason::Complete;
-    let mut calls = BTreeMap::<usize, PartialToolCall>::new();
-
-    for line in response.lines() {
+    for line in response
+        .take(super::super::continuation::MAX_RESPONSE_BYTES)
+        .lines()
+    {
         let line = line.map_err(ModelError::new)?;
         let Some(data) = line.strip_prefix("data: ") else {
             continue;
         };
         let event: Value = serde_json::from_str(data).map_err(ModelError::new)?;
-
-        match event.get("type").and_then(Value::as_str) {
-            Some("message_start") => usage.update(event.get("message").unwrap_or(&Value::Null)),
+        match event["type"].as_str() {
+            Some("message_start") => {
+                usage.update(&event["message"]);
+                model = event
+                    .pointer("/message/model")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+            }
             Some("message_delta") => {
                 usage.update(&event);
                 if let Some(reason) = event.pointer("/delta/stop_reason").and_then(Value::as_str) {
-                    stop = super::super::stop_reason::anthropic(Some(reason));
+                    stop = Some(reason.to_owned());
                 }
             }
             Some("error") => return Err(ModelError::new(event.get("error").unwrap_or(&event))),
             Some("content_block_start") => {
-                let index = event.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
+                let index = event["index"].as_u64().unwrap_or(0) as usize;
                 let block = event
                     .get("content_block")
                     .ok_or_else(|| ModelError::new("Anthropic 流式事件缺少内容块"))?;
-                if block.get("type").and_then(Value::as_str) == Some("tool_use") {
-                    let partial = calls.entry(index).or_default();
-                    partial.id =
-                        required_string(block, "id", "Anthropic 工具调用缺少 id")?.to_owned();
-                    partial.name =
-                        required_string(block, "name", "Anthropic 工具调用缺少名称")?.to_owned();
+                content.start(index, block)?;
+                if block["type"] == "text"
+                    && let Some(part) = block["text"].as_str()
+                {
+                    text.push_str(part);
+                    on_text_delta(part);
                 }
             }
             Some("content_block_delta") => {
-                let index = event.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
+                let index = event["index"].as_u64().unwrap_or(0) as usize;
                 let delta = event
                     .get("delta")
                     .ok_or_else(|| ModelError::new("Anthropic 流式事件缺少增量"))?;
-                match delta.get("type").and_then(Value::as_str) {
-                    Some("text_delta") => {
-                        if let Some(delta) = delta.get("text").and_then(Value::as_str) {
-                            text.push_str(delta);
-                            on_text_delta(delta);
-                        }
-                    }
-                    Some("input_json_delta") => {
-                        if let Some(delta) = delta.get("partial_json").and_then(Value::as_str) {
-                            calls.entry(index).or_default().arguments.push_str(delta);
-                        }
-                    }
-                    _ => {}
+                content.delta(index, delta)?;
+                if delta["type"] == "text_delta"
+                    && let Some(part) = delta["text"].as_str()
+                {
+                    text.push_str(part);
+                    on_text_delta(part);
                 }
             }
             Some("message_stop") => {
@@ -79,35 +70,17 @@ pub(super) fn parse_stream(
             _ => {}
         }
     }
-
     if !finished {
         return Err(ModelError::new("anthropic 流在结束标记之前中断"));
     }
-    if !stop.is_complete() {
-        calls.clear();
-    }
-    let calls = calls
-        .into_values()
-        .map(|call| {
-            if call.id.is_empty() || call.name.is_empty() {
-                return Err(ModelError::new("Anthropic 流式工具调用不完整"));
-            }
-            Ok(ToolCall::new(
-                call.id,
-                call.name,
-                arguments_from_json(&call.arguments)?,
-            ))
-        })
-        .collect::<Result<Vec<_>, ModelError>>()?;
-
-    let response = ModelResponse::tool_calls(calls)
-        .with_usage(usage.finish())
-        .with_stop_reason(stop);
-    if text.is_empty() {
-        Ok(response)
+    let complete = super::super::stop_reason::anthropic(stop.as_deref()).is_complete();
+    let value = json!({"content":content.finish(complete)?,"stop_reason":stop,"model":model});
+    let parsed = parse_response(&value)?.with_usage(usage.finish());
+    Ok(if text.is_empty() {
+        parsed
     } else {
-        Ok(response.with_text(text))
-    }
+        parsed.with_text(text)
+    })
 }
 
 #[cfg(test)]

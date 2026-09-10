@@ -1,6 +1,7 @@
 //! 第三方模型服务适配器。
 
 mod anthropic;
+mod continuation;
 mod openai;
 mod stop_reason;
 

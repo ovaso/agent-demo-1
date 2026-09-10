@@ -8,7 +8,7 @@ use request::{messages, tools};
 use response::parse_response;
 use stream::parse_stream;
 
-use std::io::BufReader;
+use std::io::{BufReader, Read};
 
 use reqwest::blocking::Client;
 use serde_json::{Value, json};
@@ -51,6 +51,11 @@ impl OpenAiCompatibleProvider {
     }
 
     fn request_body(&self, request: &ModelRequest<'_>) -> Result<Value, ModelError> {
+        super::continuation::validate(
+            request,
+            super::continuation::OPENAI,
+            &super::continuation::binding(super::continuation::OPENAI, &self.model, &self.base_url),
+        )?;
         Ok(json!({
             "model": self.model,
             "messages": messages(request.messages(), request.memories())?,
@@ -75,11 +80,18 @@ impl ModelProvider for OpenAiCompatibleProvider {
             .send()
             .map_err(ModelError::new)?
             .error_for_status()
-            .map_err(ModelError::new)?
-            .json::<Value>()
             .map_err(ModelError::new)?;
+        let response: Value =
+            serde_json::from_reader(response.take(super::continuation::MAX_RESPONSE_BYTES))
+                .map_err(ModelError::new)?;
 
-        parse_response(&response)
+        let mut parsed = parse_response(&response)?;
+        parsed.bind_continuation(super::continuation::binding(
+            super::continuation::OPENAI,
+            &self.model,
+            &self.base_url,
+        ));
+        Ok(parsed)
     }
 
     fn stream(
@@ -103,6 +115,12 @@ impl ModelProvider for OpenAiCompatibleProvider {
             .error_for_status()
             .map_err(ModelError::new)?;
 
-        parse_stream(BufReader::new(response), on_text_delta)
+        let mut parsed = parse_stream(BufReader::new(response), on_text_delta)?;
+        parsed.bind_continuation(super::continuation::binding(
+            super::continuation::OPENAI,
+            &self.model,
+            &self.base_url,
+        ));
+        Ok(parsed)
     }
 }

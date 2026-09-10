@@ -18,12 +18,17 @@ pub(super) fn parse_stream(
     on_text_delta: &mut dyn FnMut(&str),
 ) -> Result<ModelResponse, ModelError> {
     let mut text = String::new();
+    let mut reasoning: Option<String> = None;
+    let mut response_model = None;
     let mut usage = usage::Usage::default();
     let mut finished = false;
     let mut stop = agent_core::model::StopReason::Complete;
     let mut calls = BTreeMap::<usize, PartialToolCall>::new();
 
-    for line in response.lines() {
+    for line in response
+        .take(super::super::continuation::MAX_RESPONSE_BYTES)
+        .lines()
+    {
         let line = line.map_err(ModelError::new)?;
         let Some(data) = line.strip_prefix("data: ") else {
             continue;
@@ -38,6 +43,9 @@ pub(super) fn parse_stream(
             return Err(ModelError::new(error));
         }
         usage.update(&chunk);
+        if let Some(model) = chunk.get("model").and_then(Value::as_str) {
+            response_model = Some(model.to_owned());
+        }
         if let Some(reason) = chunk
             .pointer("/choices/0/finish_reason")
             .and_then(Value::as_str)
@@ -48,6 +56,9 @@ pub(super) fn parse_stream(
             continue;
         };
 
+        if let Some(part) = delta.get("reasoning_content").and_then(Value::as_str) {
+            reasoning.get_or_insert_with(String::new).push_str(part);
+        }
         if let Some(content) = delta.get("content").and_then(Value::as_str) {
             text.push_str(content);
             on_text_delta(content);
@@ -95,7 +106,15 @@ pub(super) fn parse_stream(
         })
         .collect::<Result<Vec<_>, ModelError>>()?;
 
+    let continuation = reasoning.map(|text| {
+        agent_core::model::ModelContinuation::new(
+            super::super::continuation::OPENAI,
+            serde_json::json!({"reasoning_content":text}),
+        )
+    });
     let response = ModelResponse::tool_calls(calls)
+        .with_continuation(continuation)
+        .with_response_model(response_model)
         .with_usage(usage.finish())
         .with_stop_reason(stop);
     if text.is_empty() {

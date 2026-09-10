@@ -114,7 +114,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             super::message_delivery::mark_seen(state, &inbox);
         }
         let stop = response.stop_reason().clone();
-        let (text, calls) = response.into_parts();
+        let (text, calls, continuation) = response.into_reply_parts();
         let mut ids = BTreeSet::new();
         if calls.len() > state.limits.max_calls_per_response
             || calls
@@ -143,7 +143,9 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 self.commit(state)?;
                 return Err(AgentError::EmptyModelResponse.into());
             };
-            state.context.push_assistant(&text);
+            state
+                .context
+                .push(Message::assistant_reply(&text, Vec::new(), continuation));
             if state.graph.active.is_some() {
                 super::graph_execution::finish_node(
                     state,
@@ -174,9 +176,11 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             state.phase = LoopPhase::Done;
             state.status = RunStatus::Completed;
         } else {
-            state
-                .context
-                .push_assistant_with_tool_calls(text.unwrap_or_default(), calls.clone());
+            state.context.push(Message::assistant_reply(
+                text.unwrap_or_default(),
+                calls.clone(),
+                continuation,
+            ));
             state.pending = calls.into();
             state.phase = LoopPhase::Tools;
         }

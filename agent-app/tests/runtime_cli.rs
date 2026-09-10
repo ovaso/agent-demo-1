@@ -1,3 +1,5 @@
+#[path = "runtime_cli/continuation.rs"]
+mod continuation;
 #[path = "runtime_cli/env_file.rs"]
 mod env_file;
 #[path = "runtime_cli/model_limits.rs"]

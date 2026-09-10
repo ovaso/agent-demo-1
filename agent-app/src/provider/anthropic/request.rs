@@ -18,7 +18,15 @@ pub(super) fn messages(
             Message::Assistant {
                 content: assistant_text,
                 tool_calls,
+                continuation,
             } => {
+                if let Some(continuation) = continuation {
+                    if continuation.protocol() != super::super::continuation::ANTHROPIC {
+                        return Err(ModelError::new("模型续接协议不匹配"));
+                    }
+                    output.push(json!({"role":"assistant","content":continuation.data()}));
+                    continue;
+                }
                 let mut blocks = Vec::new();
                 if !assistant_text.is_empty() {
                     blocks.push(json!({"type": "text", "text": assistant_text}));

@@ -1,3 +1,4 @@
+mod content;
 mod helpers;
 mod request;
 mod response;
@@ -8,7 +9,7 @@ use request::{messages, tools};
 use response::parse_response;
 use stream::parse_stream;
 
-use std::io::BufReader;
+use std::io::{BufReader, Read};
 
 use reqwest::{
     blocking::Client,
@@ -52,6 +53,15 @@ impl AnthropicProvider {
     }
 
     fn request_body(&self, request: &ModelRequest<'_>) -> Result<Value, ModelError> {
+        super::continuation::validate(
+            request,
+            super::continuation::ANTHROPIC,
+            &super::continuation::binding(
+                super::continuation::ANTHROPIC,
+                &self.model,
+                &self.base_url,
+            ),
+        )?;
         let (system, messages) = messages(request.messages(), request.memories())?;
         Ok(json!({
             "model": self.model,
@@ -85,11 +95,18 @@ impl ModelProvider for AnthropicProvider {
             .send()
             .map_err(ModelError::new)?
             .error_for_status()
-            .map_err(ModelError::new)?
-            .json::<Value>()
             .map_err(ModelError::new)?;
+        let response: Value =
+            serde_json::from_reader(response.take(super::continuation::MAX_RESPONSE_BYTES))
+                .map_err(ModelError::new)?;
 
-        parse_response(&response)
+        let mut parsed = parse_response(&response)?;
+        parsed.bind_continuation(super::continuation::binding(
+            super::continuation::ANTHROPIC,
+            &self.model,
+            &self.base_url,
+        ));
+        Ok(parsed)
     }
 
     fn stream(
@@ -116,6 +133,12 @@ impl ModelProvider for AnthropicProvider {
             .error_for_status()
             .map_err(ModelError::new)?;
 
-        parse_stream(BufReader::new(response), on_text_delta)
+        let mut parsed = parse_stream(BufReader::new(response), on_text_delta)?;
+        parsed.bind_continuation(super::continuation::binding(
+            super::continuation::ANTHROPIC,
+            &self.model,
+            &self.base_url,
+        ));
+        Ok(parsed)
     }
 }

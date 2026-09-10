@@ -1,7 +1,9 @@
 //! 模型服务的抽象接口。
 
+mod continuation;
 mod response;
 mod usage;
+pub use continuation::ModelContinuation;
 pub use response::{ModelResponse, StopReason};
 pub use usage::ModelUsage;
 

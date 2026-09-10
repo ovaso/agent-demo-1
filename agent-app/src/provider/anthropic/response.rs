@@ -36,7 +36,24 @@ pub(super) fn parse_response(response: &Value) -> Result<ModelResponse, ModelErr
     }
 
     let text = (!texts.is_empty()).then(|| texts.join("\n"));
+    let continuation = (stop.is_complete()
+        && blocks
+            .iter()
+            .any(|b| matches!(b["type"].as_str(), Some("thinking" | "redacted_thinking"))))
+    .then(|| {
+        agent_core::model::ModelContinuation::new(
+            super::super::continuation::ANTHROPIC,
+            Value::Array(blocks.clone()),
+        )
+    });
     Ok(ModelResponse::tool_calls(calls)
+        .with_continuation(continuation)
+        .with_response_model(
+            response
+                .get("model")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+        )
         .with_optional_text(text)
         .with_usage(usage::parse(response))
         .with_stop_reason(stop))

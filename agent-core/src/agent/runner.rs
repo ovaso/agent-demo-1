@@ -2,7 +2,7 @@ use serde_json::json;
 
 use super::{Agent, AgentError, AgentResult};
 use crate::{
-    context::{Context, ContextStore},
+    context::{Context, ContextStore, Message},
     memory::MemoryStore,
     model::{ModelProvider, ModelRequest},
     trace::{RunTrace, TraceEvent, TraceSink},
@@ -136,11 +136,11 @@ where
             agent.context_store.save(session_id, &context)?;
             return Err(crate::model::ModelError::new(response.stop_reason().description()).into());
         }
-        let (text, calls) = response.into_parts();
+        let (text, calls, continuation) = response.into_reply_parts();
 
         if calls.is_empty() {
             let text = text.ok_or(AgentError::EmptyModelResponse)?;
-            context.push_assistant(&text);
+            context.push(Message::assistant_reply(&text, Vec::new(), continuation));
             trace.call(&mut agent.trace_sink, "context.save", || {
                 agent.context_store.save(session_id, &context)
             })?;
@@ -159,7 +159,11 @@ where
             });
         }
 
-        context.push_assistant_with_tool_calls(text.unwrap_or_default(), calls.clone());
+        context.push(Message::assistant_reply(
+            text.unwrap_or_default(),
+            calls.clone(),
+            continuation,
+        ));
 
         if let Some(result) =
             super::tool_calls::execute(agent, session_id, &mut context, calls, step, trace)?

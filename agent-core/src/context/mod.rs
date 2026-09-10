@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 
 use serde::{Deserialize, Serialize};
 
-use super::tool::ToolCall;
+use super::{model::ModelContinuation, tool::ToolCall};
 
 mod memory;
 #[cfg(test)]
@@ -45,6 +45,8 @@ pub enum Message {
         content: String,
         #[serde(default)]
         tool_calls: Vec<ToolCall>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        continuation: Option<ModelContinuation>,
     },
     Tool {
         #[serde(default)]
@@ -71,6 +73,7 @@ impl Message {
         Self::Assistant {
             content: content.into(),
             tool_calls: Vec::new(),
+            continuation: None,
         }
     }
 
@@ -81,6 +84,26 @@ impl Message {
         Self::Assistant {
             content: content.into(),
             tool_calls,
+            continuation: None,
+        }
+    }
+
+    pub fn assistant_reply(
+        content: impl Into<String>,
+        tool_calls: Vec<ToolCall>,
+        continuation: Option<ModelContinuation>,
+    ) -> Self {
+        Self::Assistant {
+            content: content.into(),
+            tool_calls,
+            continuation,
+        }
+    }
+
+    pub fn continuation(&self) -> Option<&ModelContinuation> {
+        match self {
+            Self::Assistant { continuation, .. } => continuation.as_ref(),
+            _ => None,
         }
     }
 

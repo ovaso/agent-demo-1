@@ -33,11 +33,3 @@ pub(super) fn arguments_from_object(object: &Map<String, Value>) -> Arguments {
             )
         })
 }
-
-pub(super) fn arguments_from_json(arguments: &str) -> Result<Arguments, ModelError> {
-    let value: Value = serde_json::from_str(arguments).map_err(ModelError::new)?;
-    let object = value
-        .as_object()
-        .ok_or_else(|| ModelError::new("工具参数必须是 JSON 对象"))?;
-    Ok(arguments_from_object(object))
-}

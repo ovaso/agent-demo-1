@@ -17,6 +17,7 @@ pub struct Step {
     calls: Vec<Value>,
     pub complete: bool,
     stop: Option<&'static str>,
+    reasoning: Option<&'static str>,
 }
 
 pub fn call(id: &str, name: &str, arguments: Value) -> Value {
@@ -31,6 +32,7 @@ impl Step {
             calls,
             complete: true,
             stop: None,
+            reasoning: None,
         }
     }
 
@@ -39,6 +41,11 @@ impl Step {
             text: text.into(),
             ..Self::tools(actor, vec![])
         }
+    }
+
+    pub fn reasoning(mut self, text: &'static str) -> Self {
+        self.reasoning = Some(text);
+        self
     }
 
     pub fn stopped(mut self, reason: &'static str) -> Self {
@@ -53,13 +60,27 @@ impl Step {
 
     fn response(&self, provider: Provider) -> String {
         let mut events = Vec::new();
+        let offset = usize::from(self.reasoning.is_some());
+        if let Some(thinking) = self.reasoning {
+            match provider {
+                Provider::OpenAi => events.push(json!({"model":"reported-model","choices":[{"delta":{"reasoning_content":thinking}}]})),
+                Provider::Anthropic => {
+                    events.push(json!({"type":"message_start","message":{"model":"reported-model"}}));
+                    events.push(json!({"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}));
+                    events.push(json!({"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":thinking}}));
+                    events.push(json!({"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"synthetic-signature"}}));
+                    events.push(json!({"type":"content_block_stop","index":0}));
+                }
+            }
+        }
         if !self.text.is_empty() {
             events.push(match provider {
                 Provider::OpenAi => json!({"choices":[{"delta":{"content":self.text}}]}),
-                Provider::Anthropic => json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":self.text}}),
+                Provider::Anthropic => json!({"type":"content_block_delta","index":offset,"delta":{"type":"text_delta","text":self.text}}),
             });
         }
         for (index, call) in self.calls.iter().enumerate() {
+            let index = index + offset + usize::from(!self.text.is_empty());
             let args = call["arguments"].to_string();
             let mut middle = args.len() / 2;
             while !args.is_char_boundary(middle) {

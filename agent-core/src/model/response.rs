@@ -1,4 +1,4 @@
-use super::ModelUsage;
+use super::{ModelContinuation, ModelUsage};
 use crate::tool::ToolCall;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,6 +31,8 @@ pub struct ModelResponse {
     tool_calls: Vec<ToolCall>,
     usage: ModelUsage,
     stop_reason: StopReason,
+    continuation: Option<ModelContinuation>,
+    response_model: Option<String>,
 }
 
 impl ModelResponse {
@@ -40,6 +42,8 @@ impl ModelResponse {
             tool_calls: Vec::new(),
             usage: ModelUsage::default(),
             stop_reason: StopReason::Complete,
+            continuation: None,
+            response_model: None,
         }
     }
 
@@ -49,6 +53,8 @@ impl ModelResponse {
             tool_calls,
             usage: ModelUsage::default(),
             stop_reason: StopReason::Complete,
+            continuation: None,
+            response_model: None,
         }
     }
 
@@ -84,6 +90,26 @@ impl ModelResponse {
 
     pub fn stop_reason(&self) -> &StopReason {
         &self.stop_reason
+    }
+
+    pub fn with_continuation(mut self, continuation: Option<ModelContinuation>) -> Self {
+        self.continuation = continuation;
+        self
+    }
+    pub fn bind_continuation(&mut self, binding: String) {
+        if let Some(continuation) = &mut self.continuation {
+            continuation.bind(binding);
+        }
+    }
+    pub fn with_response_model(mut self, model: Option<String>) -> Self {
+        self.response_model = model;
+        self
+    }
+    pub fn response_model(&self) -> Option<&str> {
+        self.response_model.as_deref()
+    }
+    pub fn into_reply_parts(self) -> (Option<String>, Vec<ToolCall>, Option<ModelContinuation>) {
+        (self.text, self.tool_calls, self.continuation)
     }
 
     pub fn into_parts(self) -> (Option<String>, Vec<ToolCall>) {

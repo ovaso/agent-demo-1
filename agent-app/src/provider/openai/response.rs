@@ -49,7 +49,23 @@ pub(super) fn parse_response(response: &Value) -> Result<ModelResponse, ModelErr
         .transpose()?
         .unwrap_or_default();
 
+    let continuation = message
+        .get("reasoning_content")
+        .filter(|v| v.is_string())
+        .map(|v| {
+            agent_core::model::ModelContinuation::new(
+                super::super::continuation::OPENAI,
+                serde_json::json!({"reasoning_content":v}),
+            )
+        });
     Ok(ModelResponse::tool_calls(calls)
+        .with_continuation(continuation)
+        .with_response_model(
+            response
+                .get("model")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+        )
         .with_optional_text(text)
         .with_usage(usage::parse(response))
         .with_stop_reason(stop))

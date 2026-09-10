@@ -28,6 +28,7 @@ pub(super) fn messages(
             Message::Assistant {
                 content,
                 tool_calls,
+                continuation,
             } => {
                 let mut value = json!({"role": "assistant", "content": content});
                 if !tool_calls.is_empty() {
@@ -46,6 +47,14 @@ pub(super) fn messages(
                             })
                             .collect(),
                     );
+                }
+                if let Some(continuation) = continuation {
+                    if continuation.protocol() != super::super::continuation::OPENAI {
+                        return Err(ModelError::new("模型续接协议不匹配"));
+                    }
+                    if let Some(reasoning) = continuation.data().get("reasoning_content") {
+                        value["reasoning_content"] = reasoning.clone();
+                    }
                 }
                 output.push(value);
             }

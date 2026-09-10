@@ -61,6 +61,8 @@ pub(super) fn stream<M: ModelProvider, T: TraceSink>(
     trace.record(
         sink,
         TraceEvent::new("model.response.completed")
+            .with_field("response_model", response.response_model())
+            .with_field("stop_reason", format!("{:?}", response.stop_reason()))
             .with_field("session_id", session_id)
             .with_field("loop_step", step as u64)
             .with_field("duration_ms", model_elapsed.as_millis() as u64)

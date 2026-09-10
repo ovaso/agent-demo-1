@@ -99,9 +99,9 @@ fn model_board_writes_have_runtime_authorship_and_cannot_claim_verification() {
 }
 
 #[test]
-fn planning_context_exposes_only_read_capabilities_and_keeps_saved_history_unchanged() {
+fn planning_context_exposes_only_read_capabilities_and_persists_one_goal() {
     let (mut runtime, _) = runtime(MemoryRunStore::new(), vec![]);
-    let state = runtime
+    let mut state = runtime
         .start_with_options(
             "run",
             "session",
@@ -110,12 +110,14 @@ fn planning_context_exposes_only_read_capabilities_and_keeps_saved_history_uncha
             RunOptions::plan_only(RunLimits::new(1)),
         )
         .unwrap();
-    let (messages, tools) = super::planning_prompt::request_context(&state).unwrap();
+    let (messages, tools, _) = super::model_input::prepare(&mut state).unwrap();
     assert!(!tools.iter().any(|tool| tool.name() == "count"));
     assert!(tools.iter().any(|tool| tool.name() == "runtime_plan"));
-    assert_eq!(messages.len(), state.context().len() + 2);
+    assert_eq!(messages.len(), state.context().len() + 1);
     let data: serde_json::Value = serde_json::from_str(
-        messages[1]
+        messages
+            .last()
+            .unwrap()
             .content()
             .strip_prefix("运行状态（数据）：")
             .unwrap(),
@@ -123,8 +125,12 @@ fn planning_context_exposes_only_read_capabilities_and_keeps_saved_history_uncha
     .unwrap();
     assert_eq!(data["execution_tool_definitions"][0]["name"], "count");
     assert_eq!(
-        state.context().snapshot(),
-        vec![crate::context::Message::user("go")]
+        state
+            .context()
+            .history()
+            .filter(|m| m.content() == "go")
+            .count(),
+        1
     );
 }
 

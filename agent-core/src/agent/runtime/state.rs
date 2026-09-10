@@ -44,6 +44,8 @@ pub enum LoopPhase {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunState {
     #[serde(default)]
+    pub(crate) prompt_history: super::prompt_history::PromptHistory,
+    #[serde(default)]
     pub(crate) collaboration: super::super::collaboration::CollaborationState,
     #[serde(default)]
     pub(crate) delegations_created: usize,
@@ -191,6 +193,7 @@ impl RunState {
             return Err(RuntimeError::Invalid("不兼容的检查点格式版本".into()));
         }
         self.limits.validate()?;
+        self.prompt_history.validate()?;
         super::step_budget::validate(self)?;
         if let Some(id) = &self.graph.active {
             if self.graph.coordinator_context.is_none()

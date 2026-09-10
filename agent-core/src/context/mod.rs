@@ -170,6 +170,8 @@ pub struct Context {
     system: Option<Message>,
     history: VecDeque<Message>,
     history_limit: usize,
+    #[serde(default)]
+    generation: u64,
 }
 
 impl Default for Context {
@@ -188,6 +190,7 @@ impl Context {
             system: None,
             history: VecDeque::new(),
             history_limit,
+            generation: 0,
         }
     }
 
@@ -247,6 +250,10 @@ impl Context {
         self.trim_history();
     }
 
+    pub(crate) fn generation(&self) -> u64 {
+        self.generation
+    }
+
     pub fn history_limit(&self) -> usize {
         self.history_limit
     }
@@ -280,6 +287,7 @@ impl Context {
     /// 清除 user、assistant 与 tool 消息，但保留 system prompt。
     pub fn clear_history(&mut self) {
         self.history.clear();
+        self.generation = self.generation.wrapping_add(1);
     }
 
     fn trim_history(&mut self) {
@@ -300,6 +308,7 @@ impl Context {
                 _ => 1,
             };
             self.history.drain(..remove);
+            self.generation = self.generation.wrapping_add(1);
         }
     }
 }

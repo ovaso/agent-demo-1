@@ -19,12 +19,14 @@ mod graph_tests;
 mod message_delivery;
 mod message_tools;
 mod model_execution;
+mod model_input;
 mod options;
 mod planning_prompt;
 #[cfg(test)]
 mod planning_tests;
 mod planning_tools;
 mod planning_view;
+mod prompt_history;
 mod serialization;
 #[cfg(feature = "sqlite")]
 mod sqlite;

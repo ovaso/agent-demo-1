@@ -7,7 +7,6 @@ use crate::{
         planning::Plan,
         routing::ExecutionMode,
     },
-    context::Message,
     tool::ToolDefinition,
 };
 use serde::Serialize;
@@ -50,7 +49,7 @@ struct NodeView<'a> {
     validation: Option<ValidationKind>,
 }
 
-pub(super) fn message(state: &RunState) -> Result<Message, RuntimeError> {
+pub(super) fn value(state: &RunState) -> Result<serde_json::Value, RuntimeError> {
     let active_id = state.graph.active_node();
     let active = state
         .graph
@@ -115,12 +114,17 @@ pub(super) fn message(state: &RunState) -> Result<Message, RuntimeError> {
                 extension_block: state.step_extension_block(),
             }),
     };
+    serde_json::to_value(overview).map_err(RuntimeError::storage)
+}
+
+#[cfg(test)]
+pub(super) fn message(state: &RunState) -> Result<crate::context::Message, RuntimeError> {
     super::serialization::encode_prefixed(
-        &overview,
-        "运行状态（数据）：",
+        &value(state)?,
+        super::prompt_history::SNAPSHOT_PREFIX,
         state.limits.max_context_bytes,
     )
-    .map(Message::user)
+    .map(crate::context::Message::user)
 }
 
 fn preview(text: &str) -> &str {

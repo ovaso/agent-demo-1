@@ -177,14 +177,25 @@ pub fn exchange(mut stream: TcpStream, provider: Provider, step: &Step) -> Value
 }
 
 pub fn overview(request: &Value) -> Value {
-    request["messages"]
+    let mut state = serde_json::Map::new();
+    for text in request["messages"]
         .as_array()
         .unwrap()
         .iter()
-        .filter_map(|message| message["content"].as_str())
-        .find_map(|text| text.strip_prefix("运行状态（数据）："))
-        .map(|text| serde_json::from_str(text).unwrap())
-        .expect("runtime state sent to provider")
+        .filter_map(|m| m["content"].as_str())
+    {
+        let json = if let Some(value) = text.strip_prefix("运行状态（数据）：") {
+            state.clear();
+            value
+        } else if let Some(value) = text.strip_prefix("运行状态增量（数据）：") {
+            value
+        } else {
+            continue;
+        };
+        let value: Value = serde_json::from_str(json).unwrap();
+        state.extend(value.as_object().unwrap().clone());
+    }
+    Value::Object(state)
 }
 
 pub fn has_tool(request: &Value, name: &str) -> bool {

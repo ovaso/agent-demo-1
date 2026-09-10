@@ -4,6 +4,8 @@ mod continuation;
 mod env_file;
 #[path = "runtime_cli/model_limits.rs"]
 mod model_limits;
+#[path = "runtime_cli/prompt_prefix.rs"]
+mod prompt_prefix;
 mod support;
 
 use agent_core::agent::{

@@ -119,3 +119,54 @@ fn planning_context_exposes_only_read_capabilities_and_keeps_saved_history_uncha
         vec![crate::context::Message::user("go")]
     );
 }
+
+#[test]
+fn planning_view_keeps_the_data_contract_and_hides_unrelated_nodes_from_workers() {
+    use crate::agent::{planning::Plan, routing::ExecutionMode};
+    let (mut runtime, _) = runtime(MemoryRunStore::new(), vec![]);
+    runtime
+        .start_with_options(
+            "run",
+            "session",
+            "go",
+            Context::new(),
+            RunOptions {
+                planning: true,
+                limits: RunLimits::new(2),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let plan: Plan = serde_json::from_str(r#"{"goal":"go","requirements":["checked"],"tasks":[{"id":"a","description":"inspect","acceptance":["checked"],"action":{"kind":"agent","prompt":"inspect"}},{"id":"b","description":"review","acceptance":["checked"],"action":{"kind":"agent","prompt":"review"}}]}"#).unwrap();
+    runtime.propose_plan("run", 0, plan.clone()).unwrap();
+    let root = runtime.route("run", ExecutionMode::Graph, "run").unwrap();
+    let view = |state: &RunState| -> serde_json::Value {
+        let message = super::planning_view::message(state).unwrap();
+        serde_json::from_str(
+            message
+                .content()
+                .strip_prefix("运行状态（数据）：")
+                .unwrap(),
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        view(&root),
+        serde_json::json!({
+            "active_node":null,"actor":"main","agent_budget":null,"board_sequence":0,
+            "execution_tool_definitions":root.tools,"goal":"go","intent":"Execute",
+            "mode":"graph","model_calls_remaining":2,"plan":plan,"plan_version":1,
+            "nodes":[
+                {"attempts":0,"id":"a","output":"","status":"Pending","validation":null},
+                {"attempts":0,"id":"b","output":"","status":"Pending","validation":null}
+            ]
+        })
+    );
+    let worker = runtime.advance("run", &mut |_| {}).unwrap();
+    let view = view(&worker);
+    assert_eq!(view["actor"], "node/a");
+    assert!(view["plan"].is_null());
+    assert_eq!(view["nodes"].as_array().unwrap().len(), 1);
+    assert_eq!(view["nodes"][0]["id"], "a");
+    assert_eq!(view["nodes"][0]["status"], "Running");
+}

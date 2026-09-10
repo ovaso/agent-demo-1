@@ -9,8 +9,20 @@ pub(super) fn check(value: &impl Serialize, limit: usize) -> Result<(), RuntimeE
 
 #[cfg(feature = "sqlite")]
 pub(super) fn encode(value: &impl Serialize, limit: usize) -> Result<String, RuntimeError> {
-    let mut buffer = Vec::with_capacity(limit.min(128));
-    write_json(value, Some(&mut buffer), limit)?;
+    encode_prefixed(value, "", limit)
+}
+
+pub(super) fn encode_prefixed(
+    value: &impl Serialize,
+    prefix: &str,
+    limit: usize,
+) -> Result<String, RuntimeError> {
+    let remaining = limit
+        .checked_sub(prefix.len())
+        .ok_or_else(|| RuntimeError::Invalid("序列化字节数超限".into()))?;
+    let mut buffer = Vec::with_capacity(limit.min(128).max(prefix.len()));
+    buffer.extend_from_slice(prefix.as_bytes());
+    write_json(value, Some(&mut buffer), remaining)?;
     String::from_utf8(buffer).map_err(RuntimeError::storage)
 }
 
@@ -59,6 +71,13 @@ mod tests {
         let expected = serde_json::to_string(&value).unwrap();
         assert!(check(&value, expected.len()).is_ok());
         assert!(check(&value, expected.len() - 1).is_err());
+        let prefixed = format!("数据：{expected}");
+        assert_eq!(
+            encode_prefixed(&value, "数据：", prefixed.len()).unwrap(),
+            prefixed
+        );
+        assert!(encode_prefixed(&value, "数据：", prefixed.len() - 1).is_err());
+        assert!(encode_prefixed(&value, "数据：", 1).is_err());
         #[cfg(feature = "sqlite")]
         {
             assert_eq!(encode(&value, expected.len()).unwrap(), expected);

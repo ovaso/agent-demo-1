@@ -24,6 +24,7 @@ mod planning_prompt;
 #[cfg(test)]
 mod planning_tests;
 mod planning_tools;
+mod planning_view;
 mod serialization;
 #[cfg(feature = "sqlite")]
 mod sqlite;

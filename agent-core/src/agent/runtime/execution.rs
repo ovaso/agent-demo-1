@@ -32,12 +32,30 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 )
                 .map_err(RuntimeError::storage)?;
             let response = super::planning_tools::invoke(state, &call, &self.tools);
-            let (text, ready) = match response {
-                Ok(output) => (output.text, output.plan_ready),
-                Err(error) => (format!("运行时工具失败：{error}"), false),
+            if let Ok(output) = &response
+                && let Some(request_id) = &output.wait_request
+            {
+                state.phase = LoopPhase::Waiting {
+                    request_id: request_id.clone(),
+                };
+                self.commit(state)?;
+                return trace
+                    .end(&mut self.trace, None)
+                    .map_err(RuntimeError::storage);
+            }
+            let (text, ready, abort) = match response {
+                Ok(output) => (output.text, output.plan_ready, output.abort_batch),
+                Err(error) => (
+                    format!("运行时工具失败：{error}"),
+                    false,
+                    matches!(call.name(), "runtime_ask" | "runtime_wait"),
+                ),
             };
             self.accept_tool(state, ToolOutput::text(text))?;
             state.last_tool_succeeded = None;
+            if abort {
+                Self::skip_batch(state, "未执行：协作请求失败，需要重新决定");
+            }
             if ready {
                 for pending in state.pending.drain(..) {
                     state
@@ -143,5 +161,12 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             };
         }
         Ok(())
+    }
+
+    pub(super) fn skip_batch(state: &mut RunState, reason: &str) {
+        for call in state.pending.drain(..) {
+            state.context.push_tool(call.id(), call.name(), reason);
+        }
+        state.phase = LoopPhase::Model;
     }
 }

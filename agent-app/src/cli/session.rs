@@ -116,6 +116,20 @@ impl<M: ModelProvider> Session<M> {
                 let id = self.id(None)?;
                 super::print_agents(&self.runtime.state(&id)?);
             }
+            Command::Messages(message) => {
+                let id = self.id(None)?;
+                super::print_messages(&self.runtime.state(&id)?, message)?;
+            }
+            Command::Message(to, body) => {
+                let id = self.id(None)?;
+                self.runtime.send_notice(&id, to, body)?;
+                println!("通知已保存，暂停状态保持不变。");
+            }
+            Command::Reply(request, body) => {
+                let id = self.id(None)?;
+                self.runtime.answer_request(&id, request, body)?;
+                println!("答复已保存，使用 /resume 继续。");
+            }
             Command::AgentBudget(agent, max_steps) => {
                 let id = self.id(None)?;
                 super::print_agents(&self.runtime.set_agent_budget(&id, agent, max_steps)?);

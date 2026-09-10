@@ -2,6 +2,9 @@
 
 mod agent_tools;
 mod budget;
+mod collaboration;
+#[cfg(test)]
+mod collaboration_tests;
 mod control;
 mod delegation;
 #[cfg(test)]
@@ -13,6 +16,8 @@ mod graph_control;
 mod graph_execution;
 #[cfg(test)]
 mod graph_tests;
+mod message_delivery;
+mod message_tools;
 mod model_execution;
 mod options;
 mod planning_prompt;

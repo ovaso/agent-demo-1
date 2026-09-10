@@ -1,6 +1,6 @@
 # 自适应 Agent 执行设计
 
-状态：设计草案，记录当前讨论的目标与建议边界；以下新增接口、模块和 CLI 命令尚未实现。2026-09-09 补充了子 Agent 协作协议、等待与恢复语义、任务收敛条件和审查场景。
+状态：分阶段实现中。可恢复 Loop、计划与 Blackboard、Graph 路由、平面 Agent 委托及消息协作已提供；已提交功能、验证结果和当前限制见 [implementation-progress.md](implementation-progress.md) 与 [runtime-cli.md](runtime-cli.md)。本文保留整体目标，包括后续仍需评估的并发能力。
 
 ## 目标与现状
 

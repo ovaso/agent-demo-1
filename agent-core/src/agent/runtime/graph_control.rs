@@ -57,7 +57,17 @@ pub(super) fn request_route(
             "进入 Graph 需要可执行任务和已保存计划".into(),
         ));
     }
-    state.routing.request(mode, reason)
+    state.routing.request(mode, reason)?;
+    if mode == ExecutionMode::Loop
+        && let Some(id) = state.graph.active.clone()
+        && let Some(node) = state
+            .graph
+            .current_mut()
+            .and_then(|run| run.nodes.get_mut(&id))
+    {
+        node.output = format!("请求协调者处理：{reason}");
+    }
+    Ok(())
 }
 
 pub(super) fn apply_route(state: &mut RunState) -> Result<(), RuntimeError> {

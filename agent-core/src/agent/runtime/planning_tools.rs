@@ -6,6 +6,8 @@ use super::{RunState, RuntimeError, WorkIntent};
 use crate::tool::{Parameter, ToolCall, ToolDefinition};
 
 pub(super) struct ControlOutput {
+    pub abort_batch: bool,
+    pub wait_request: Option<String>,
     pub text: String,
     pub plan_ready: bool,
 }
@@ -59,6 +61,7 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
         ),
     ];
     tools.extend(super::agent_tools::definitions());
+    tools.extend(super::message_tools::definitions());
     tools
 }
 
@@ -67,6 +70,9 @@ pub(super) fn invoke(
     call: &ToolCall,
     tools: &crate::tool::Registry,
 ) -> Result<ControlOutput, RuntimeError> {
+    if super::message_tools::handles(call.name()) {
+        return super::message_tools::invoke(state, call);
+    }
     if super::agent_tools::handles(call.name()) {
         return super::agent_tools::invoke(state, call);
     }
@@ -120,6 +126,7 @@ pub(super) fn invoke(
             let revision = state
                 .plans
                 .propose(number(required(call, "expected_revision")?)?, plan)?;
+            super::message_delivery::supersede(state);
             if state.graph.current().is_some() {
                 state.graph.bind(
                     revision,
@@ -190,6 +197,8 @@ pub(super) fn invoke(
         _ => unreachable!(),
     };
     Ok(ControlOutput {
+        abort_batch: false,
+        wait_request: None,
         text,
         plan_ready: call.name() == "runtime_plan_ready",
     })

@@ -20,8 +20,23 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         state: &mut RunState,
         trace: &mut RunTrace,
     ) -> Result<bool, RuntimeError> {
+        super::message_delivery::tick(state, super::collaboration::now_ms());
         super::graph_control::apply_route(state)?;
         if let Some(id) = state.graph.active.clone() {
+            if let LoopPhase::Waiting { request_id } = state.phase.clone() {
+                match super::message_delivery::wait_result(state, &request_id)? {
+                    Some(result) => {
+                        self.accept_tool(state, crate::tool::ToolOutput::text(result.text))?;
+                        state.last_tool_succeeded = None;
+                        if !result.succeeded {
+                            Self::skip_batch(state, "未执行：协作请求失败，需要重新决定");
+                        }
+                    }
+                    None => finish_node(state, NodeStatus::Waiting, None, None)?,
+                }
+                self.commit(state)?;
+                return Ok(true);
+            }
             let action = state
                 .graph
                 .current()

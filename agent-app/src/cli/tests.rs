@@ -197,3 +197,60 @@ fn model_can_delegate_from_loop_and_cli_reports_local_usage() {
         1
     );
 }
+
+#[test]
+fn operator_reply_unblocks_a_saved_agent_request() {
+    use agent_core::agent::{collaboration::MessageStatus, delegation::AgentSpec};
+    let directory = Directory::new();
+    let ask = ModelResponse::tool_calls(vec![ToolCall::new(
+        "ask-main",
+        "runtime_ask",
+        Arguments::new()
+            .with("to", "main")
+            .with("body", "need confirmation")
+            .with("timeout_ms", "60000"),
+    )]);
+    let mut session = directory.session(vec![
+        ask,
+        ModelResponse::text("Need operator input"),
+        ModelResponse::text("A complete"),
+        ModelResponse::text("Root complete"),
+    ]);
+    session.limits = RunLimits::new(4);
+    session.handle(parse("/start work").unwrap()).unwrap();
+    let id = session
+        .runtime
+        .store()
+        .latest("session")
+        .unwrap()
+        .unwrap()
+        .id()
+        .to_owned();
+    session
+        .runtime
+        .delegate(
+            &id,
+            AgentSpec {
+                name: "a".into(),
+                instruction: "ask for information".into(),
+                acceptance: vec!["report".into()],
+                tools: Some(vec![]),
+                max_steps: 2,
+                depends_on: vec![],
+            },
+        )
+        .unwrap();
+    session.handle(parse("/resume").unwrap()).unwrap();
+    let state = session.runtime.state(&id).unwrap();
+    let request = state.collaboration().messages().next().unwrap().id.clone();
+    session
+        .handle(parse(&format!("/reply {request} confirmed")).unwrap())
+        .unwrap();
+    session.handle(parse("/resume").unwrap()).unwrap();
+    let state = session.runtime.state(&id).unwrap();
+    assert_eq!(state.result().unwrap().text(), "Root complete");
+    assert!(
+        matches!(&state.collaboration().get(&request).unwrap().status, MessageStatus::Answered { by, .. } if by == "operator")
+    );
+    assert_eq!(state.budget().model_calls(), 4);
+}

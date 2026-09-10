@@ -13,6 +13,9 @@ pub(super) enum Command<'a> {
     Agents,
     AgentBudget(&'a str, u64),
     CancelAgent(&'a str),
+    Messages(Option<&'a str>),
+    Message(&'a str, &'a str),
+    Reply(&'a str, &'a str),
     Help,
     Trace,
     Reset,
@@ -50,6 +53,18 @@ pub(super) fn parse(input: &str) -> Result<Command<'_>, String> {
         })),
         "/graph" if rest.is_empty() => Ok(Command::Graph),
         "/agents" if rest.is_empty() => Ok(Command::Agents),
+        "/messages" => Ok(Command::Messages(optional_id(rest)?)),
+        "/message" | "/reply" => {
+            let (target, body) = split(rest);
+            if target.is_empty() || body.is_empty() {
+                return Err("用法：/message <地址> <内容> 或 /reply <请求ID> <答复>".into());
+            }
+            Ok(if name == "/message" {
+                Command::Message(target, body)
+            } else {
+                Command::Reply(target, body)
+            })
+        }
         "/agent-budget" => {
             let (node, value) = split(rest);
             let max_steps = value

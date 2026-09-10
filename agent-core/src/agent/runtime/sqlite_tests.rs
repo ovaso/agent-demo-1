@@ -269,3 +269,43 @@ fn delegated_agent_keeps_its_scope_and_spent_budget_after_reopen() {
     assert_eq!(policy.tools, vec!["count"]);
     assert_eq!(state.budget().model_calls(), 3);
 }
+
+#[test]
+fn resumes_after_reply_commit_without_resending_or_repeating_the_trailing_tool() {
+    use super::collaboration_tests;
+    let db = Database::new();
+    let mut responses = collaboration_tests::responses();
+    let remaining = responses.split_off(2);
+    let (mut first, count) = runtime(db.open(), responses);
+    collaboration_tests::start(&mut first);
+    for _ in 0..7 {
+        first.advance("run", &mut |_| {}).unwrap();
+    }
+    assert_eq!(count.load(Ordering::SeqCst), 0);
+    assert!(matches!(
+        first
+            .state("run")
+            .unwrap()
+            .collaboration()
+            .get("run:m1")
+            .unwrap()
+            .status,
+        crate::agent::collaboration::MessageStatus::Answered { .. }
+    ));
+    drop(first);
+    let (mut second, count) = runtime(db.open(), remaining);
+    let state = second.resume("run", &mut |_| {}).unwrap();
+    assert_eq!(state.status(), &RunStatus::Completed);
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+    assert_eq!(state.budget().model_calls(), 5);
+    assert_eq!(state.collaboration.messages().count(), 1);
+    assert_eq!(
+        state
+            .node_context(0, "a")
+            .unwrap()
+            .history()
+            .filter(|message| message.tool_call_id() == Some("ask-a"))
+            .count(),
+        1
+    );
+}

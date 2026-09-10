@@ -139,6 +139,25 @@ fn print_agents(state: &RunState) {
     }
 }
 
+fn print_messages(state: &RunState, id: Option<&str>) -> Result<(), Box<dyn Error>> {
+    if let Some(id) = id {
+        let message = state.collaboration().get(id).ok_or("找不到消息 ID")?;
+        println!("{}", serde_json::to_string_pretty(message)?);
+    } else {
+        for message in state.collaboration().messages() {
+            println!(
+                "{}  {} → {}  {}  计划v{}",
+                message.id,
+                message.from,
+                message.to,
+                message.status.label(),
+                message.plan_version
+            );
+        }
+    }
+    Ok(())
+}
+
 fn print_plan(state: &RunState) {
     match state.plans().current() {
         Some(plan) => {
@@ -172,6 +191,9 @@ fn help() {
   /agents              查看子 Agent 状态、工具范围与预算
   /agent-budget <ID> <步数>  调整子 Agent 累计额度
   /cancel-agent <ID>   取消子任务，保留记录和用量
+  /messages [消息ID]  查看协作消息状态或内容
+  /message <地址> <内容>  给 main 或 node/节点ID 留下通知
+  /reply <请求ID> <答复>  以操作者身份答复，再 /resume
   /status [运行 ID]     查看状态、预算和最终结果
   /resume [运行 ID]     恢复执行，沿用原预算
   /step [运行 ID]       推进一个阶段（暂停后需 /resume）

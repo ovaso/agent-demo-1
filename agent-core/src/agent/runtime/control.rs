@@ -68,6 +68,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         context.push_user(input);
         super::store::bounded_json(&context, limits.max_context_bytes)?;
         let state = RunState {
+            collaboration: Default::default(),
             delegations_created: 0,
             graph: Default::default(),
             routing: Default::default(),
@@ -141,6 +142,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             }
         }
         state.status = RunStatus::Cancelled;
+        super::message_delivery::cancel_all(&mut state, "根任务已取消");
         self.commit(&mut state)?;
         Ok(state)
     }

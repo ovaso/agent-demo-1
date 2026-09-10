@@ -34,6 +34,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         let mut state = self.state(id)?;
         Self::check_editable(&state)?;
         cancel(&mut state, agent, true)?;
+        super::message_delivery::tick(&mut state, super::collaboration::now_ms());
         self.commit(&mut state)?;
         Ok(state)
     }

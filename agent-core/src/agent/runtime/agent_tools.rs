@@ -98,12 +98,15 @@ pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOut
         }
         "runtime_cancel_agent" => {
             super::delegation::cancel(state, required(call, "node")?, false)?;
+            super::message_delivery::tick(state, super::collaboration::now_ms());
             "任务已取消，历史与用量保留。".into()
         }
         "runtime_result" => result(state, call)?,
         _ => unreachable!(),
     };
     Ok(ControlOutput {
+        abort_batch: false,
+        wait_request: None,
         text,
         plan_ready: false,
     })

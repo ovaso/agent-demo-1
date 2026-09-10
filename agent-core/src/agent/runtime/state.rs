@@ -34,6 +34,7 @@ pub enum LoopPhase {
     Model,
     ModelInFlight,
     Tools,
+    Waiting { request_id: String },
     ToolInFlight { call_id: String },
     FinishSession { summary: String },
     Done,
@@ -42,6 +43,8 @@ pub enum LoopPhase {
 /// 一个根任务的一致检查点。会话、待调用工具和预算在同一提交中保存。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunState {
+    #[serde(default)]
+    pub(crate) collaboration: super::super::collaboration::CollaborationState,
     #[serde(default)]
     pub(crate) delegations_created: usize,
     #[serde(default)]
@@ -83,6 +86,9 @@ pub struct RunState {
 }
 
 impl RunState {
+    pub fn collaboration(&self) -> &super::super::collaboration::CollaborationState {
+        &self.collaboration
+    }
     pub fn actor(&self) -> String {
         self.graph
             .active_node()
@@ -216,6 +222,15 @@ impl RunState {
         {
             return Err(RuntimeError::Invalid(
                 "执行中的工具与待执行队列不匹配".into(),
+            ));
+        }
+        if let LoopPhase::Waiting { request_id } = &self.phase
+            && (self.graph.active.is_none()
+                || self.pending.is_empty()
+                || self.collaboration.get(request_id).is_none())
+        {
+            return Err(RuntimeError::Invalid(
+                "协作等待缺少节点、原调用或请求记录".into(),
             ));
         }
         if matches!(self.status, RunStatus::Completed)

@@ -38,6 +38,7 @@ impl<M: ModelProvider> Session<M> {
         tools.register(crate::tools::ReadFile::new())?;
         tools.register(crate::tools::ListDirectory::new())?;
         tools.register(crate::tools::SearchFiles::new())?;
+        tools.register(crate::tools::RunCheck::new())?;
         let max_steps =
             env::var("RS_AGENT_MAX_STEPS").map_or(Ok(8), |value| value.parse::<u64>())?;
         if max_steps == 0 {
@@ -94,6 +95,22 @@ impl<M: ModelProvider> Session<M> {
                     None => state.blackboard().changes(0, 32),
                 };
                 println!("{}", serde_json::to_string_pretty(&entries)?);
+            }
+            Command::Mode(mode) => {
+                let id = self.id(None)?;
+                let state = match mode {
+                    Some(mode) => self.runtime.route(&id, mode, "用户选择执行方式")?,
+                    None => self.runtime.state(&id)?,
+                };
+                super::print_status(&state);
+            }
+            Command::Graph => {
+                let id = self.id(None)?;
+                super::print_graph(&self.runtime.state(&id)?);
+            }
+            Command::RetryNode(node) => {
+                let id = self.id(None)?;
+                super::print_status(&self.runtime.retry_node(&id, node)?);
             }
             Command::Resume(id) => {
                 let id = self.id(id)?;

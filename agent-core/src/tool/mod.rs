@@ -153,11 +153,12 @@ impl ToolCall {
     }
 }
 
-/// 一次成功的工具调用结果。
+/// 工具已返回的结果；成功返回传输结果不代表业务检查通过。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolOutput {
     content: String,
     finish_session: bool,
+    succeeded: bool,
 }
 
 impl ToolOutput {
@@ -165,6 +166,7 @@ impl ToolOutput {
         Self {
             content: content.into(),
             finish_session: false,
+            succeeded: true,
         }
     }
 
@@ -172,6 +174,7 @@ impl ToolOutput {
         Self {
             content: content.into(),
             finish_session: true,
+            succeeded: true,
         }
     }
 
@@ -180,7 +183,14 @@ impl ToolOutput {
     }
 
     pub fn finishes_session(&self) -> bool {
-        self.finish_session
+        self.finish_session && self.succeeded
+    }
+    pub fn with_success(mut self, succeeded: bool) -> Self {
+        self.succeeded = succeeded;
+        self
+    }
+    pub fn succeeded(&self) -> bool {
+        self.succeeded
     }
 }
 

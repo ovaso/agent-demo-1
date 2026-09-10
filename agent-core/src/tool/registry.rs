@@ -42,6 +42,17 @@ impl Registry {
         self.tools.contains_key(name)
     }
 
+    /// 仅校验调用形状，不执行工具，用于计划预检。
+    pub fn validate(&self, name: &str, arguments: &Arguments) -> Result<(), RegistryError> {
+        let tool = self
+            .tools
+            .get(name)
+            .ok_or_else(|| RegistryError::ToolNotFound {
+                name: name.to_owned(),
+            })?;
+        validate_arguments(name, tool.parameters(), arguments)
+    }
+
     /// 校验参数并调用指定工具。
     pub fn invoke(&self, name: &str, arguments: &Arguments) -> Result<ToolOutput, RegistryError> {
         let tool = self

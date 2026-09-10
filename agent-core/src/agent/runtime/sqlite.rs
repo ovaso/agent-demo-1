@@ -225,7 +225,7 @@ fn save_context(tx: &Transaction<'_>, state: &RunState) -> Result<(), RuntimeErr
             WHERE agent_contexts.context_json != excluded.context_json",
             params![
                 state.session_id,
-                serde_json::to_string(&state.context).map_err(RuntimeError::storage)?
+                serde_json::to_string(state.context()).map_err(RuntimeError::storage)?
             ],
         )
         .map_err(RuntimeError::storage)?;

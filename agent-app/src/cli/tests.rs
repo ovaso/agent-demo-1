@@ -131,3 +131,39 @@ fn cli_plan_survives_restart_and_requires_execute_without_resetting_budget() {
     assert_eq!(state.budget().model_calls(), 2);
     assert_eq!(state.plans().revision(), 1);
 }
+
+#[test]
+fn cli_can_select_graph_before_executing_a_saved_plan() {
+    use agent_core::agent::{graph::NodeStatus, routing::ExecutionMode};
+    let directory = Directory::new();
+    let plan = r#"{"goal":"inspect","requirements":["checked"],"tasks":[{"id":"a","description":"inspect","acceptance":["checked"],"action":{"kind":"agent","prompt":"inspect"}}]}"#;
+    let response = ModelResponse::tool_calls(vec![
+        ToolCall::new(
+            "p",
+            "runtime_plan",
+            Arguments::new()
+                .with("expected_revision", "0")
+                .with("plan", plan),
+        ),
+        ToolCall::new("ready", "runtime_plan_ready", Arguments::new()),
+    ]);
+    let mut session = directory.session(vec![
+        response,
+        ModelResponse::text("node complete"),
+        ModelResponse::text("root complete"),
+    ]);
+    session.limits = RunLimits::new(3);
+    session.handle(parse("/plan inspect").unwrap()).unwrap();
+    session.handle(parse("/mode graph").unwrap()).unwrap();
+    let state = session.runtime.store().latest("session").unwrap().unwrap();
+    assert_eq!(state.status(), &RunStatus::Paused(PauseReason::PlanReady));
+    assert_eq!(state.routing().pending_mode(), Some(ExecutionMode::Graph));
+    session.handle(parse("/execute").unwrap()).unwrap();
+    let state = session.runtime.store().latest("session").unwrap().unwrap();
+    assert_eq!(state.result().unwrap().text(), "root complete");
+    assert_eq!(
+        state.graph().current().unwrap().nodes["a"].status,
+        NodeStatus::Succeeded
+    );
+    assert_eq!(state.budget().model_calls(), 3);
+}

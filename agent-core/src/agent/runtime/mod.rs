@@ -5,6 +5,11 @@ mod control;
 mod engine;
 mod error;
 mod execution;
+mod graph_control;
+mod graph_execution;
+#[cfg(test)]
+mod graph_tests;
+mod model_execution;
 mod options;
 mod planning_prompt;
 #[cfg(test)]

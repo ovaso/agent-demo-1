@@ -68,6 +68,12 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         context.push_user(input);
         super::store::bounded_json(&context, limits.max_context_bytes)?;
         let state = RunState {
+            graph: Default::default(),
+            routing: Default::default(),
+            requested_node: None,
+            last_tool_succeeded: None,
+            last_tool_operator: false,
+            work_revision: 0,
             goal: input.into(),
             intent: options.intent,
             planning: options.planning,
@@ -114,6 +120,25 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 .context
                 .push_tool(call.id(), call.name(), "未执行：任务已取消");
         }
+        if state.graph.active.is_some() {
+            super::graph_execution::finish_node(
+                &mut state,
+                super::super::graph::NodeStatus::Cancelled,
+                None,
+                None,
+            )?;
+        }
+        if let Some(graph) = state.graph.current_mut() {
+            for node in graph.nodes.values_mut() {
+                if !matches!(
+                    node.status,
+                    super::super::graph::NodeStatus::Succeeded
+                        | super::super::graph::NodeStatus::Failed
+                ) {
+                    node.status = super::super::graph::NodeStatus::Cancelled;
+                }
+            }
+        }
         state.status = RunStatus::Cancelled;
         self.commit(&mut state)?;
         Ok(state)
@@ -149,7 +174,10 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         {
             return Err(RuntimeError::Invalid("不是当前待核实工具".into()));
         }
+        let succeeded = output.succeeded();
         self.accept_tool(&mut state, output)?;
+        state.last_tool_succeeded = Some(succeeded);
+        state.last_tool_operator = true;
         state.status = RunStatus::Paused(PauseReason::User);
         self.commit(&mut state)?;
         Ok(state)

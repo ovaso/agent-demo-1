@@ -19,6 +19,23 @@ pub enum TaskAction {
     },
 }
 
+impl TaskAction {
+    pub(crate) fn tool_call(&self, id: impl Into<String>) -> Option<crate::tool::ToolCall> {
+        let Self::Tool {
+            name, arguments, ..
+        } = self
+        else {
+            return None;
+        };
+        let arguments = arguments
+            .iter()
+            .fold(crate::tool::Arguments::new(), |args, (key, value)| {
+                args.with(key, value)
+            });
+        Some(crate::tool::ToolCall::new(id, name, arguments))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolCheck {

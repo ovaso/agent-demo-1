@@ -102,6 +102,9 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             return self.commit(state);
         }
         state.budget.transitions += 1;
+        if self.graph_step(state, trace)? {
+            return Ok(());
+        }
         match &state.phase {
             LoopPhase::Model => self.call_model(state, on_text, trace),
             LoopPhase::Tools => self.call_tool(state, trace),

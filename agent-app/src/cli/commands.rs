@@ -1,3 +1,5 @@
+use agent_core::agent::routing::ExecutionMode;
+
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Command<'a> {
     Input(&'a str),
@@ -5,6 +7,9 @@ pub(super) enum Command<'a> {
     Plan(Option<&'a str>),
     Execute(Option<&'a str>),
     Board(Option<&'a str>),
+    Mode(Option<ExecutionMode>),
+    Graph,
+    RetryNode(&'a str),
     Help,
     Trace,
     Reset,
@@ -34,6 +39,16 @@ pub(super) fn parse(input: &str) -> Result<Command<'_>, String> {
         })),
         "/execute" => Ok(Command::Execute(optional_id(rest)?)),
         "/board" => Ok(Command::Board(optional_id(rest)?)),
+        "/mode" => Ok(Command::Mode(match rest {
+            "" => None,
+            "loop" => Some(ExecutionMode::Loop),
+            "graph" => Some(ExecutionMode::Graph),
+            _ => return Err("用法：/mode [loop|graph]".into()),
+        })),
+        "/graph" if rest.is_empty() => Ok(Command::Graph),
+        "/retry-node" if !rest.is_empty() => {
+            Ok(Command::RetryNode(optional_id(rest)?.expect("nonempty")))
+        }
         "/help" if rest.is_empty() => Ok(Command::Help),
         "/trace" if rest.is_empty() => Ok(Command::Trace),
         "/reset" if rest.is_empty() => Ok(Command::Reset),

@@ -12,10 +12,35 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         let _lease = self.store.acquire()?;
         let mut state = self.state(id)?;
         Self::check_editable(&state)?;
+        if state.graph.active.is_some()
+            || !state.pending.is_empty()
+            || state.phase != super::LoopPhase::Model
+        {
+            return Err(RuntimeError::Invalid("需在协调者的安全边界修订计划".into()));
+        }
         if !state.goal.is_empty() && plan.goal != state.goal {
             return Err(RuntimeError::Invalid("计划目标必须与根任务一致".into()));
         }
+        for task in &plan.tasks {
+            if let Some(call) = task.action.tool_call("validate") {
+                if !state.tools.iter().any(|tool| tool.name() == call.name()) {
+                    return Err(RuntimeError::Invalid(
+                        "计划包含未经当前任务授权的工具".into(),
+                    ));
+                }
+                self.tools
+                    .validate(call.name(), call.arguments())
+                    .map_err(|error| RuntimeError::Invalid(error.to_string()))?;
+            }
+        }
         state.plans.propose(expected_revision, plan)?;
+        if state.graph.current().is_some() {
+            state.graph.bind(
+                state.plans.revision(),
+                state.plans.current().expect("saved plan"),
+                state.work_revision,
+            )?;
+        }
         self.commit(&mut state)?;
         Ok(state)
     }
@@ -32,6 +57,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         state
             .blackboard
             .write(author, state.plans.revision(), update)?;
+        state.work_revision += 1;
         self.commit(&mut state)?;
         Ok(state)
     }

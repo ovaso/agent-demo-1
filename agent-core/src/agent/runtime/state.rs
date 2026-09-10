@@ -18,6 +18,7 @@ pub enum PauseReason {
     Limit(String),
     ToolResultUnknown(String),
     PlanReady,
+    GraphBlocked(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -41,6 +42,18 @@ pub enum LoopPhase {
 /// 一个根任务的一致检查点。会话、待调用工具和预算在同一提交中保存。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunState {
+    #[serde(default)]
+    pub(crate) graph: super::super::graph::GraphState,
+    #[serde(default)]
+    pub(crate) routing: super::super::routing::RoutingState,
+    #[serde(default)]
+    pub(crate) requested_node: Option<String>,
+    #[serde(default)]
+    pub(crate) last_tool_succeeded: Option<bool>,
+    #[serde(default)]
+    pub(crate) last_tool_operator: bool,
+    #[serde(default)]
+    pub(crate) work_revision: u64,
     #[serde(default)]
     pub(crate) goal: String,
     #[serde(default)]
@@ -68,6 +81,36 @@ pub struct RunState {
 }
 
 impl RunState {
+    /// 读取活动或历史节点上下文，解析跨版本结果引用。
+    pub fn node_context(&self, mut version: u64, id: &str) -> Option<&Context> {
+        for _ in 0..16 {
+            let run = self
+                .graph
+                .history()
+                .iter()
+                .find(|run| run.plan_version == version)?;
+            let node = run.nodes.get(id)?;
+            if self.graph.active_node() == Some(id) && self.graph.current()?.plan_version == version
+            {
+                return Some(&self.context);
+            }
+            if let Some(previous) = node.reused_from {
+                if previous >= version {
+                    return None;
+                }
+                version = previous;
+            } else {
+                return Some(&node.context);
+            }
+        }
+        None
+    }
+    pub fn graph(&self) -> &super::super::graph::GraphState {
+        &self.graph
+    }
+    pub fn routing(&self) -> &super::super::routing::RoutingState {
+        &self.routing
+    }
     pub fn goal(&self) -> &str {
         &self.goal
     }
@@ -102,7 +145,10 @@ impl RunState {
         &self.limits
     }
     pub fn context(&self) -> &Context {
-        &self.context
+        self.graph
+            .coordinator_context
+            .as_ref()
+            .unwrap_or(&self.context)
     }
     pub fn result(&self) -> Option<&AgentResult> {
         self.result.as_ref()
@@ -116,6 +162,23 @@ impl RunState {
             return Err(RuntimeError::Invalid("不兼容的检查点格式版本".into()));
         }
         self.limits.validate()?;
+        if let Some(id) = &self.graph.active {
+            if self.graph.coordinator_context.is_none()
+                || !self.graph.current().is_some_and(|graph| {
+                    graph
+                        .nodes
+                        .get(id)
+                        .is_some_and(|node| node.status == super::super::graph::NodeStatus::Running)
+                })
+            {
+                return Err(RuntimeError::Invalid("图节点与协调者检查点不一致".into()));
+            }
+        } else if self.graph.coordinator_context.is_some() {
+            return Err(RuntimeError::Invalid("缺少活动节点的协调者上下文".into()));
+        }
+        if self.status == RunStatus::Completed && self.graph.unfinished() {
+            return Err(RuntimeError::Invalid("根任务完成但图节点尚未结算".into()));
+        }
         if self.intent == super::WorkIntent::PlanOnly && !self.planning {
             return Err(RuntimeError::Invalid("只规划检查点缺少规划能力".into()));
         }

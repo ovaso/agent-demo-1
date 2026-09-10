@@ -39,15 +39,39 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
             "只规划模式下交付当前已保存计划，暂停等待用户执行。调用后的本批其余工具不执行。",
             vec![],
         ),
+        ToolDefinition::new(
+            "runtime_route",
+            "选择 loop 或 graph；Graph 需要已有计划，批次结束后切换。节点内切回 Loop 会保存节点并交回协调者，剩余任务仍需完成。",
+            vec![
+                Parameter::required("mode", "loop 或 graph"),
+                Parameter::required("reason", "路由原因"),
+            ],
+        ),
+        ToolDefinition::new(
+            "runtime_run_node",
+            "协调者选择一个依赖已满足的节点执行；Loop 模式也可使用。",
+            vec![Parameter::required("node", "任务 ID")],
+        ),
+        ToolDefinition::new(
+            "runtime_retry_node",
+            "重试已知失败的只读或验证节点，每节点最多 3 次；普通写入节点需操作者明确重试。",
+            vec![Parameter::required("node", "任务 ID")],
+        ),
     ]
 }
 
-pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOutput, RuntimeError> {
+pub(super) fn invoke(
+    state: &mut RunState,
+    call: &ToolCall,
+    tools: &crate::tool::Registry,
+) -> Result<ControlOutput, RuntimeError> {
     let allowed: &[&str] = match call.name() {
         "runtime_plan" => &["expected_revision", "plan"],
         "runtime_board_write" => &["update"],
         "runtime_board_read" => &["key", "revision", "after"],
         "runtime_plan_ready" => &[],
+        "runtime_route" => &["mode", "reason"],
+        "runtime_run_node" | "runtime_retry_node" => &["node"],
         _ => return Err(RuntimeError::Invalid("未知运行时工具".into())),
     };
     if call
@@ -59,6 +83,11 @@ pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOut
     }
     let text = match call.name() {
         "runtime_plan" => {
+            if state.graph.active.is_some() {
+                return Err(RuntimeError::Invalid(
+                    "节点不能修改根计划，需先交回协调者".into(),
+                ));
+            }
             let source = required(call, "plan")?;
             if source.len() > 128 * 1024 {
                 return Err(RuntimeError::Invalid("计划输入超过 128 KiB".into()));
@@ -67,6 +96,11 @@ pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOut
                 .map_err(|error| RuntimeError::Invalid(error.to_string()))?;
             plan.goal.clone_from(&state.goal);
             for task in &plan.tasks {
+                if let Some(call) = task.action.tool_call("validate") {
+                    tools
+                        .validate(call.name(), call.arguments())
+                        .map_err(|error| RuntimeError::Invalid(error.to_string()))?;
+                }
                 if let super::super::planning::TaskAction::Tool { name, .. } = &task.action
                     && !state.tools.iter().any(|tool| tool.name() == name)
                 {
@@ -76,6 +110,13 @@ pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOut
             let revision = state
                 .plans
                 .propose(number(required(call, "expected_revision")?)?, plan)?;
+            if state.graph.current().is_some() {
+                state.graph.bind(
+                    revision,
+                    state.plans.current().expect("saved plan"),
+                    state.work_revision,
+                )?;
+            }
             serde_json::json!({"plan_version": revision}).to_string()
         }
         "runtime_board_write" => {
@@ -88,9 +129,12 @@ pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOut
             if update.kind == EntryKind::Verification {
                 return Err(RuntimeError::Invalid("模型不能伪造程序验证记录".into()));
             }
-            let entry = state
-                .blackboard
-                .write("main", state.plans.revision(), update)?;
+            let entry = state.blackboard.write(
+                state.graph.active.as_deref().unwrap_or("main"),
+                state.plans.revision(),
+                update,
+            )?;
+            state.work_revision += 1;
             serde_json::json!({"key":entry.key,"revision":entry.revision,"sequence":entry.sequence})
                 .to_string()
         }
@@ -102,6 +146,23 @@ pub(super) fn invoke(state: &mut RunState, call: &ToolCall) -> Result<ControlOut
                 ));
             }
             "计划已保存，等待执行指令。".into()
+        }
+        "runtime_route" => {
+            let mode = match required(call, "mode")? {
+                "loop" => super::super::routing::ExecutionMode::Loop,
+                "graph" => super::super::routing::ExecutionMode::Graph,
+                _ => return Err(RuntimeError::Invalid("mode 必须为 loop 或 graph".into())),
+            };
+            super::graph_control::request_route(state, mode, required(call, "reason")?)?;
+            "模式选择已记录，工具批次结算后生效。".into()
+        }
+        "runtime_run_node" => {
+            super::graph_control::request_node(state, required(call, "node")?)?;
+            "节点已排入调度。".into()
+        }
+        "runtime_retry_node" => {
+            super::graph_control::request_retry(state, required(call, "node")?, false)?;
+            "重试已排入调度。".into()
         }
         _ => unreachable!(),
     };

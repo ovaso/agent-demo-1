@@ -78,6 +78,12 @@ pub(crate) fn show_status(id: Option<&str>) -> Result<(), Box<dyn Error>> {
 
 fn print_status(state: &RunState) {
     println!(
+        "执行方式：{:?}；待切换：{:?}；活动节点：{:?}",
+        state.routing().mode(),
+        state.routing().pending_mode(),
+        state.graph().active_node()
+    );
+    println!(
         "运行：{}\n状态：{:?}\n阶段：{:?}\n模型步数：{}/{}；工具调用：{}/{}；检查点：{}",
         state.id(),
         state.status(),
@@ -94,6 +100,20 @@ fn print_status(state: &RunState) {
     if state.status() == &RunStatus::Paused(agent_core::agent::runtime::PauseReason::PlanReady) {
         print_plan(state);
         println!("计划已保存；/execute 开始执行，/resume 保持只规划边界。");
+    }
+}
+
+fn print_graph(state: &RunState) {
+    if let Some(graph) = state.graph().current() {
+        println!("图计划 v{}", graph.plan_version);
+        for (id, node) in &graph.nodes {
+            println!(
+                "  [{id}] {:?}，尝试 {}，验收依据 {:?}\n    {}",
+                node.status, node.attempts, node.validation, node.task.description
+            );
+        }
+    } else {
+        println!("尚未启动图执行。");
     }
 }
 
@@ -124,6 +144,9 @@ fn help() {
   /plan                 查看当前计划
   /execute [运行 ID]    执行已交付的计划，沿用原预算
   /board [记录标识]     查看共享记录（未指定时最多 32 条）
+  /mode [loop|graph]    查看或选择执行方式
+  /graph               查看图节点状态
+  /retry-node <节点ID>  明确重试已知失败节点，随后 /resume
   /status [运行 ID]     查看状态、预算和最终结果
   /resume [运行 ID]     恢复执行，沿用原预算
   /step [运行 ID]       推进一个阶段（暂停后需 /resume）

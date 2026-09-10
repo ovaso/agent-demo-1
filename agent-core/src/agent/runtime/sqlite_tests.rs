@@ -172,3 +172,55 @@ fn plans_and_blackboard_survive_reopen_and_conflicts_do_not_change_the_checkpoin
     );
     assert_eq!(restored.budget().model_calls(), 0);
 }
+
+#[test]
+fn active_graph_context_is_restored_without_polluting_session_projection() {
+    use crate::agent::{planning::Plan, routing::ExecutionMode};
+    let db = Database::new();
+    let (mut first, _) = runtime(db.open(), vec![]);
+    first
+        .start("run", "session", "go", Context::new(), RunLimits::new(2))
+        .unwrap();
+    let plan: Plan = serde_json::from_str(r#"{"goal":"go","requirements":["checked"],"tasks":[{"id":"a","description":"node work","acceptance":["checked"],"action":{"kind":"agent","prompt":"inspect"}}]}"#).unwrap();
+    first.propose_plan("run", 0, plan).unwrap();
+    first.route("run", ExecutionMode::Graph, "run").unwrap();
+    first.advance("run", &mut |_| {}).unwrap();
+    assert_eq!(
+        first
+            .store()
+            .session_context("session")
+            .unwrap()
+            .unwrap()
+            .last()
+            .unwrap()
+            .content(),
+        "go"
+    );
+    first.pause("run").unwrap();
+    drop(first);
+    let (mut second, _) = runtime(
+        db.open(),
+        vec![
+            Ok(ModelResponse::text("node done")),
+            Ok(ModelResponse::text("root done")),
+        ],
+    );
+    let state = second.resume("run", &mut |_| {}).unwrap();
+    assert_eq!(state.result().unwrap().text(), "root done");
+    assert_eq!(state.graph().current().unwrap().nodes["a"].attempts, 1);
+    assert!(
+        !state
+            .context()
+            .history()
+            .any(|message| message.content() == "node done")
+    );
+    assert_eq!(
+        state
+            .node_context(1, "a")
+            .unwrap()
+            .last()
+            .unwrap()
+            .content(),
+        "node done"
+    );
+}

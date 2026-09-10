@@ -1,4 +1,5 @@
-use super::commands::Command;
+use super::{commands::Command, view};
+use crate::config::RuntimeConfig;
 use agent_core::{
     agent::runtime::{
         RunLimits, RunOptions, RunState, RunStatus, Runtime, SqliteRunStore, WorkIntent,
@@ -9,7 +10,6 @@ use agent_core::{
     trace::FileTraceSink,
 };
 use std::{
-    env,
     error::Error,
     io::{self, Write},
     sync::atomic::{AtomicU64, Ordering},
@@ -26,10 +26,9 @@ pub(super) struct Session<M> {
 
 impl<M: ModelProvider> Session<M> {
     pub(super) fn new(model: M) -> Result<Self, Box<dyn Error>> {
-        let store = SqliteRunStore::open(super::db_path())?;
-        let memory = MarkdownMemoryStore::open(
-            env::var("RS_AGENT_MEMORY_DIR").unwrap_or_else(|_| "memories".into()),
-        )?;
+        let config = RuntimeConfig::from_environment()?;
+        let store = SqliteRunStore::open(config.db_path)?;
+        let memory = MarkdownMemoryStore::open(config.memory_directory)?;
         let mut tools = Registry::new();
         tools.register(crate::tools::echo_tool())?;
         tools.register(crate::tools::session_finish_tool())?;
@@ -39,29 +38,20 @@ impl<M: ModelProvider> Session<M> {
         tools.register(crate::tools::ListDirectory::new())?;
         tools.register(crate::tools::SearchFiles::new())?;
         tools.register(crate::tools::RunCheck::new())?;
-        let max_steps =
-            env::var("RS_AGENT_MAX_STEPS").map_or(Ok(8), |value| value.parse::<u64>())?;
-        if max_steps == 0 {
-            return Err("RS_AGENT_MAX_STEPS 必须大于零".into());
-        }
         let runtime = Runtime::new(model, store, memory, tools)
-            .with_trace_sink(FileTraceSink::open(super::trace_path())?);
+            .with_trace_sink(FileTraceSink::open(config.trace_path)?);
         Ok(Self {
             runtime,
-            session_id: env::var("RS_AGENT_SESSION").unwrap_or_else(|_| "default".into()),
-            limits: RunLimits {
-                max_delegations: env::var("RS_AGENT_MAX_DELEGATIONS")
-                    .map_or(Ok(8), |value| value.parse::<usize>())?,
-                ..RunLimits::new(max_steps)
-            },
+            session_id: config.session_id,
+            limits: config.limits,
         })
     }
 
     pub(super) fn handle(&mut self, command: Command<'_>) -> Result<bool, Box<dyn Error>> {
         match command {
             Command::Exit => return Ok(true),
-            Command::Help => super::help(),
-            Command::Trace => super::show_trace()?,
+            Command::Help => view::help(),
+            Command::Trace => view::show_trace()?,
             Command::Reset => {
                 self.runtime.store_mut().reset_session(&self.session_id)?;
                 println!("当前会话历史已清除。");
@@ -72,11 +62,11 @@ impl<M: ModelProvider> Session<M> {
             }
             Command::Start(input) => {
                 let state = self.start(input, WorkIntent::Execute)?;
-                super::print_status(&state);
+                view::print_status(&state);
             }
             Command::Status(id) => {
                 let id = self.id(id)?;
-                super::print_status(&self.runtime.state(&id)?);
+                view::print_status(&self.runtime.state(&id)?);
             }
             Command::Plan(Some(input)) => {
                 let state = self.start(input, WorkIntent::PlanOnly)?;
@@ -84,7 +74,7 @@ impl<M: ModelProvider> Session<M> {
             }
             Command::Plan(None) => {
                 let id = self.id(None)?;
-                super::print_plan(&self.runtime.state(&id)?);
+                view::print_plan(&self.runtime.state(&id)?);
             }
             Command::Execute(id) => {
                 let id = self.id(id)?;
@@ -106,19 +96,19 @@ impl<M: ModelProvider> Session<M> {
                     Some(mode) => self.runtime.route(&id, mode, "用户选择执行方式")?,
                     None => self.runtime.state(&id)?,
                 };
-                super::print_status(&state);
+                view::print_status(&state);
             }
             Command::Graph => {
                 let id = self.id(None)?;
-                super::print_graph(&self.runtime.state(&id)?);
+                view::print_graph(&self.runtime.state(&id)?);
             }
             Command::Agents => {
                 let id = self.id(None)?;
-                super::print_agents(&self.runtime.state(&id)?);
+                view::print_agents(&self.runtime.state(&id)?);
             }
             Command::Messages(message) => {
                 let id = self.id(None)?;
-                super::print_messages(&self.runtime.state(&id)?, message)?;
+                view::print_messages(&self.runtime.state(&id)?, message)?;
             }
             Command::Message(to, body) => {
                 let id = self.id(None)?;
@@ -132,15 +122,15 @@ impl<M: ModelProvider> Session<M> {
             }
             Command::AgentBudget(agent, max_steps) => {
                 let id = self.id(None)?;
-                super::print_agents(&self.runtime.set_agent_budget(&id, agent, max_steps)?);
+                view::print_agents(&self.runtime.set_agent_budget(&id, agent, max_steps)?);
             }
             Command::CancelAgent(agent) => {
                 let id = self.id(None)?;
-                super::print_agents(&self.runtime.cancel_agent(&id, agent)?);
+                view::print_agents(&self.runtime.cancel_agent(&id, agent)?);
             }
             Command::RetryNode(node) => {
                 let id = self.id(None)?;
-                super::print_status(&self.runtime.retry_node(&id, node)?);
+                view::print_status(&self.runtime.retry_node(&id, node)?);
             }
             Command::Resume(id) => {
                 let id = self.id(id)?;
@@ -152,19 +142,19 @@ impl<M: ModelProvider> Session<M> {
             }
             Command::Pause(id) => {
                 let id = self.id(id)?;
-                super::print_status(&self.runtime.pause(&id)?);
+                view::print_status(&self.runtime.pause(&id)?);
             }
             Command::Cancel(id) => {
                 let id = self.id(id)?;
-                super::print_status(&self.runtime.cancel(&id)?);
+                view::print_status(&self.runtime.cancel(&id)?);
             }
             Command::Budget(max_steps, id) => {
                 let id = self.id(id)?;
-                super::print_status(&self.runtime.set_max_steps(&id, max_steps)?);
+                view::print_status(&self.runtime.set_max_steps(&id, max_steps)?);
             }
             Command::Resolve(call_id, output) => {
                 let id = self.id(None)?;
-                super::print_status(&self.runtime.resolve_tool(
+                view::print_status(&self.runtime.resolve_tool(
                     &id,
                     call_id,
                     ToolOutput::text(output),
@@ -172,7 +162,7 @@ impl<M: ModelProvider> Session<M> {
             }
             Command::Retry(call_id) => {
                 let id = self.id(None)?;
-                super::print_status(&self.runtime.retry_tool(&id, call_id)?);
+                view::print_status(&self.runtime.retry_tool(&id, call_id)?);
             }
         }
         Ok(false)
@@ -246,7 +236,7 @@ impl<M: ModelProvider> Session<M> {
             Ok(state) => state,
             Err(error) => {
                 if let Ok(state) = self.runtime.state(id) {
-                    super::print_status(&state);
+                    view::print_status(&state);
                 }
                 return Err(error.into());
             }
@@ -262,7 +252,7 @@ impl<M: ModelProvider> Session<M> {
             return Ok(true);
         }
         if single_step || state.status() != &RunStatus::Completed {
-            super::print_status(&state);
+            view::print_status(&state);
         }
         Ok(false)
     }

@@ -58,3 +58,47 @@ planning 初测每次分配从 33,094 降至 22,537 次（约 -31.9%），累计
 新增 Unicode 大小写、ID/正文/标签匹配、排序、空查询、损坏文件、旧格式与特殊字符原样往返测试。格式、Clippy、workspace 190 项测试、无默认 feature 核心库 54 项测试通过。release 保持 6,154,192 字节。
 
 memory-search 初测中位耗时为 18,596 → 17,234 µs，分配次数 3,620 → 3,101，累计分配字节 47,461,124 → 31,623,044，增量峰值 Rust 堆 15,807,798 → 309,637 字节（约 -98.0%）。此结果针对少量匹配；空查询仍按接口约定返回全部记忆，不能宣称所有查询都保持固定内存。
+
+## 应用装配与 CLI
+
+应用环境解析移至 `agent-app/src/config.rs`；CLI 状态、计划、Agent 和消息展示移至 `cli/view.rs`；`main.rs` 负责启动参数分发，`cli/mod.rs` 负责交互循环，`cli/session.rs` 负责命令执行和运行时装配。
+
+`ConfiguredProvider` 在应用边界统一协议分派，使 CLI 使用同一种运行时实例类型。核心库的通用 ModelProvider 接口保持不变，两种协议仍分别维护 HTTP 转换和增量流解析；模型名称透传以保持已保存任务的恢复检查。该分派增加一次枚举匹配，没有新增堆分配、依赖或异步运行时。应用产物本步减少 400 字节，未对这一次分派单独宣称耗时收益。
+
+## 最终比较与验证
+
+同一份基准源码分别与重构前后的核心实现编译，交替运行 5 对进程；每个进程预热一次、测量 5 次。下面使用这一轮的中位数，避免把不同阶段的时间混合比较。原始样本、范围和其他指标见 [refactor-comparison.json](benchmarks/refactor-comparison.json)。
+
+| 场景 | 耗时 µs：前 → 后 | 分配次数：前 → 后 | 累计分配字节：前 → 后 | 增量峰值 Rust 堆字节：前 → 后 |
+| --- | ---: | ---: | ---: | ---: |
+| Loop | 19,544 → 19,765（+1.13%） | 8,879 → 8,879 | 9,134,521 → 9,134,521 | 820,725 → 820,725 |
+| 带规划的 Loop | 26,228 → 26,306（+0.30%） | 33,094 → 22,537 | 13,189,034 → 12,078,628 | 922,798 → 927,918 |
+| SQLite Loop | 66,562 → 54,881（-17.55%） | 4,773 → 4,773 | 31,570,537 → 31,570,537 | 827,043 → 827,043 |
+| Markdown 记忆搜索 | 18,143 → 17,227（-5.05%） | 3,620 → 3,101 | 47,461,124 → 31,623,044 | 15,807,798 → 309,637 |
+
+本轮保留的取舍是：应用实际使用的 SQLite 路径减少序列化耗时，规划和记忆路径减少分配，内存后端 Loop 的固定样例约慢 1.1%。带规划的 Loop 增量峰值 Rust 堆增加 5,120 字节，不能表述为所有路径都更快或峰值都更低。计数器开销、文件系统与主机负载会影响耗时；这些结果不等同于真实模型延迟、进程 RSS 或 CPU 占用率。
+
+最终 release 为 **6,153,792 字节**，相对基线减少 **20,016 字节（约 0.32%）**。根 release 配置、依赖和 features 均未更改；SQLite bundled、数学渲染和语法高亮仍保留。
+
+最终验证：
+
+- `cargo fmt --all -- --check` 通过。
+- `cargo clippy --workspace --all-targets -- -D warnings` 通过。
+- `cargo test --workspace --quiet`：190 项通过，0 失败、0 忽略。
+- `cargo test -p agent-core --no-default-features --quiet`：54 项通过。
+- `cargo clippy -p agent-core --all-targets --no-default-features -- -D warnings` 通过。
+- `cargo test -p agent-app --no-default-features --quiet`：49 项通过。
+- `cargo test --release -p agent-app --test runtime_cli --locked --quiet`：5 项通过。
+- `cargo build --release -p agent-app --locked` 通过。
+
+端到端验证使用本机 HTTP 桩，覆盖 OpenAI / Anthropic、只规划边界、Blackboard、子 Agent 等待/答复、预算暂停、跨进程恢复、工具只执行一次、流中断和轨迹读取。没有连接真实模型服务。
+
+## 提交顺序
+
+| 提交 | 内容 |
+| --- | --- |
+| `f6df2a0` | 固定运行时和记忆资源基准 |
+| `fe2e2b3` | 有界检查点单次编码 |
+| `a6effad` | 借用的规划状态投影 |
+| `cd4cec9` | Markdown 逐条筛选与正文缓冲复用 |
+| 本报告所在提交 | 应用配置/CLI 展示拆分、统一 Provider 分派及最终验证记录 |

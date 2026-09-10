@@ -1,0 +1,527 @@
+{
+  "production_baseline": "f57f08d",
+  "benchmark_source_commit": "f6df2a0",
+  "optimized_core_commit": "cd4cec9",
+  "toolchain": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+  "target": "aarch64-apple-darwin",
+  "command": "cargo build --release -p agent-core --example runtime_bench --locked",
+  "method": "five alternating process pairs, each with one warmup and five measured iterations",
+  "release_bytes_before": 6173808,
+  "release_bytes_after": 6153792,
+  "summary": {
+    "loop": {
+      "before": {
+        "micros_per_iteration": 19544,
+        "allocations_per_iteration": 8879,
+        "allocated_bytes_per_iteration": 9134521,
+        "peak_additional_rust_heap_bytes": 820725,
+        "micros_range": [
+          19525,
+          19747
+        ]
+      },
+      "after": {
+        "micros_per_iteration": 19765,
+        "allocations_per_iteration": 8879,
+        "allocated_bytes_per_iteration": 9134521,
+        "peak_additional_rust_heap_bytes": 820725,
+        "micros_range": [
+          19754,
+          19991
+        ]
+      },
+      "change_percent": {
+        "micros_per_iteration": 1.13,
+        "allocations_per_iteration": 0.0,
+        "allocated_bytes_per_iteration": 0.0,
+        "peak_additional_rust_heap_bytes": 0.0
+      }
+    },
+    "planning": {
+      "before": {
+        "micros_per_iteration": 26228,
+        "allocations_per_iteration": 33094,
+        "allocated_bytes_per_iteration": 13189034,
+        "peak_additional_rust_heap_bytes": 922798,
+        "micros_range": [
+          26185,
+          26274
+        ]
+      },
+      "after": {
+        "micros_per_iteration": 26306,
+        "allocations_per_iteration": 22537,
+        "allocated_bytes_per_iteration": 12078628,
+        "peak_additional_rust_heap_bytes": 927918,
+        "micros_range": [
+          26296,
+          26324
+        ]
+      },
+      "change_percent": {
+        "micros_per_iteration": 0.3,
+        "allocations_per_iteration": -31.9,
+        "allocated_bytes_per_iteration": -8.42,
+        "peak_additional_rust_heap_bytes": 0.55
+      }
+    },
+    "sqlite": {
+      "before": {
+        "micros_per_iteration": 66562,
+        "allocations_per_iteration": 4773,
+        "allocated_bytes_per_iteration": 31570537,
+        "peak_additional_rust_heap_bytes": 827043,
+        "micros_range": [
+          66431,
+          67110
+        ]
+      },
+      "after": {
+        "micros_per_iteration": 54881,
+        "allocations_per_iteration": 4773,
+        "allocated_bytes_per_iteration": 31570537,
+        "peak_additional_rust_heap_bytes": 827043,
+        "micros_range": [
+          54502,
+          60012
+        ]
+      },
+      "change_percent": {
+        "micros_per_iteration": -17.55,
+        "allocations_per_iteration": 0.0,
+        "allocated_bytes_per_iteration": 0.0,
+        "peak_additional_rust_heap_bytes": 0.0
+      }
+    },
+    "memory-search": {
+      "before": {
+        "micros_per_iteration": 18143,
+        "allocations_per_iteration": 3620,
+        "allocated_bytes_per_iteration": 47461124,
+        "peak_additional_rust_heap_bytes": 15807798,
+        "micros_range": [
+          17976,
+          34013
+        ]
+      },
+      "after": {
+        "micros_per_iteration": 17227,
+        "allocations_per_iteration": 3101,
+        "allocated_bytes_per_iteration": 31623044,
+        "peak_additional_rust_heap_bytes": 309637,
+        "micros_range": [
+          17201,
+          17325
+        ]
+      },
+      "change_percent": {
+        "micros_per_iteration": -5.05,
+        "allocations_per_iteration": -14.34,
+        "allocated_bytes_per_iteration": -33.37,
+        "peak_additional_rust_heap_bytes": -98.04
+      }
+    }
+  },
+  "rows": [
+    {
+      "case": "loop",
+      "iterations": 5,
+      "micros_per_iteration": 19747,
+      "allocations_per_iteration": 8879,
+      "allocated_bytes_per_iteration": 9134521,
+      "peak_additional_rust_heap_bytes": 820725,
+      "sample": 1,
+      "version": "before"
+    },
+    {
+      "case": "loop",
+      "iterations": 5,
+      "micros_per_iteration": 19991,
+      "allocations_per_iteration": 8879,
+      "allocated_bytes_per_iteration": 9134521,
+      "peak_additional_rust_heap_bytes": 820725,
+      "sample": 1,
+      "version": "after"
+    },
+    {
+      "case": "planning",
+      "iterations": 5,
+      "micros_per_iteration": 26228,
+      "allocations_per_iteration": 33094,
+      "allocated_bytes_per_iteration": 13189034,
+      "peak_additional_rust_heap_bytes": 922798,
+      "sample": 1,
+      "version": "before"
+    },
+    {
+      "case": "planning",
+      "iterations": 5,
+      "micros_per_iteration": 26296,
+      "allocations_per_iteration": 22537,
+      "allocated_bytes_per_iteration": 12078628,
+      "peak_additional_rust_heap_bytes": 927918,
+      "sample": 1,
+      "version": "after"
+    },
+    {
+      "case": "sqlite",
+      "iterations": 5,
+      "micros_per_iteration": 67110,
+      "allocations_per_iteration": 4773,
+      "allocated_bytes_per_iteration": 31570537,
+      "peak_additional_rust_heap_bytes": 827043,
+      "sample": 1,
+      "version": "before"
+    },
+    {
+      "case": "sqlite",
+      "iterations": 5,
+      "micros_per_iteration": 55824,
+      "allocations_per_iteration": 4773,
+      "allocated_bytes_per_iteration": 31570537,
+      "peak_additional_rust_heap_bytes": 827043,
+      "sample": 1,
+      "version": "after"
+    },
+    {
+      "case": "memory-search",
+      "iterations": 5,
+      "micros_per_iteration": 18158,
+      "allocations_per_iteration": 3620,
+      "allocated_bytes_per_iteration": 47461124,
+      "peak_additional_rust_heap_bytes": 15807798,
+      "sample": 1,
+      "version": "before"
+    },
+    {
+      "case": "memory-search",
+      "iterations": 5,
+      "micros_per_iteration": 17218,
+      "allocations_per_iteration": 3101,
+      "allocated_bytes_per_iteration": 31623044,
+      "peak_additional_rust_heap_bytes": 309637,
+      "sample": 1,
+      "version": "after"
+    },
+    {
+      "case": "loop",
+      "iterations": 5,
+      "micros_per_iteration": 19754,
+      "allocations_per_iteration": 8879,
+      "allocated_bytes_per_iteration": 9134521,
+      "peak_additional_rust_heap_bytes": 820725,
+      "sample": 2,
+      "version": "after"
+    },
+    {
+      "case": "loop",
+      "iterations": 5,
+      "micros_per_iteration": 19525,
+      "allocations_per_iteration": 8879,
+      "allocated_bytes_per_iteration": 9134521,
+      "peak_additional_rust_heap_bytes": 820725,
+      "sample": 2,
+      "version": "before"
+    },
+    {
+      "case": "planning",
+      "iterations": 5,
+      "micros_per_iteration": 26324,
+      "allocations_per_iteration": 22537,
+      "allocated_bytes_per_iteration": 12078628,
+      "peak_additional_rust_heap_bytes": 927918,
+      "sample": 2,
+      "version": "after"
+    },
+    {
+      "case": "planning",
+      "iterations": 5,
+      "micros_per_iteration": 26247,
+      "allocations_per_iteration": 33094,
+      "allocated_bytes_per_iteration": 13189034,
+      "peak_additional_rust_heap_bytes": 922798,
+      "sample": 2,
+      "version": "before"
+    },
+    {
+      "case": "sqlite",
+      "iterations": 5,
+      "micros_per_iteration": 54502,
+      "allocations_per_iteration": 4773,
+      "allocated_bytes_per_iteration": 31570537,
+      "peak_additional_rust_heap_bytes": 827043,
+      "sample": 2,
+      "version": "after"
+    },
+    {
+      "case": "sqlite",
+      "iterations": 5,
+      "micros_per_iteration": 66431,
+      "allocations_per_iteration": 4773,
+      "allocated_bytes_per_iteration": 31570537,
+      "peak_additional_rust_heap_bytes": 827043,
+      "sample": 2,
+      "version": "before"
+    },
+    {
+      "case": "memory-search",
+      "iterations": 5,
+      "micros_per_iteration": 17325,
+      "allocations_per_iteration": 3101,
+      "allocated_bytes_per_iteration": 31623044,
+      "peak_additional_rust_heap_bytes": 309637,
+      "sample": 2,
+      "version": "after"
+    },
+    {
+      "case": "memory-search",
+      "iterations": 5,
+      "micros_per_iteration": 18040,
+      "allocations_per_iteration": 3620,
+      "allocated_bytes_per_iteration": 47461124,
+      "peak_additional_rust_heap_bytes": 15807798,
+      "sample": 2,
+      "version": "before"
+    },
+    {
+      "case": "loop",
+      "iterations": 5,
+      "micros_per_iteration": 19541,
+      "allocations_per_iteration": 8879,
+      "allocated_bytes_per_iteration": 9134521,
+      "peak_additional_rust_heap_bytes": 820725,
+      "sample": 3,
+      "version": "before"
+    },
+    {
+      "case": "loop",
+      "iterations": 5,
+      "micros_per_iteration": 19758,
+      "allocations_per_iteration": 8879,
+      "allocated_bytes_per_iteration": 9134521,
+      "peak_additional_rust_heap_bytes": 820725,
+      "sample": 3,
+      "version": "after"
+    },
+    {
+      "case": "planning",
+      "iterations": 5,
+      "micros_per_iteration": 26185,
+      "allocations_per_iteration": 33094,
+      "allocated_bytes_per_iteration": 13189034,
+      "peak_additional_rust_heap_bytes": 922798,
+      "sample": 3,
+      "version": "before"
+    },
+    {
+      "case": "planning",
+      "iterations": 5,
+      "micros_per_iteration": 26318,
+      "allocations_per_iteration": 22537,
+      "allocated_bytes_per_iteration": 12078628,
+      "peak_additional_rust_heap_bytes": 927918,
+      "sample": 3,
+      "version": "after"
+    },
+    {
+      "case": "sqlite",
+      "iterations": 5,
+      "micros_per_iteration": 66479,
+      "allocations_per_iteration": 4773,
+      "allocated_bytes_per_iteration": 31570537,
+      "peak_additional_rust_heap_bytes": 827043,
+      "sample": 3,
+      "version": "before"
+    },
+    {
+      "case": "sqlite",
+      "iterations": 5,
+      "micros_per_iteration": 54881,
+      "allocations_per_iteration": 4773,
+      "allocated_bytes_per_iteration": 31570537,
+      "peak_additional_rust_heap_bytes": 827043,
+      "sample": 3,
+      "version": "after"
+    },
+    {
+      "case": "memory-search",
+      "iterations": 5,
+      "micros_per_iteration": 17976,
+      "allocations_per_iteration": 3620,
+      "allocated_bytes_per_iteration": 47461124,
+      "peak_additional_rust_heap_bytes": 15807798,
+      "sample": 3,
+      "version": "before"
+    },
+    {
+      "case": "memory-search",
+      "iterations": 5,
+      "micros_per_iteration": 17227,
+      "allocations_per_iteration": 3101,
+      "allocated_bytes_per_iteration": 31623044,
+      "peak_additional_rust_heap_bytes": 309637,
+      "sample": 3,
+      "version": "after"
+    },
+    {
+      "case": "loop",
+      "iterations": 5,
+      "micros_per_iteration": 19909,
+      "allocations_per_iteration": 8879,
+      "allocated_bytes_per_iteration": 9134521,
+      "peak_additional_rust_heap_bytes": 820725,
+      "sample": 4,
+      "version": "after"
+    },
+    {
+      "case": "loop",
+      "iterations": 5,
+      "micros_per_iteration": 19563,
+      "allocations_per_iteration": 8879,
+      "allocated_bytes_per_iteration": 9134521,
+      "peak_additional_rust_heap_bytes": 820725,
+      "sample": 4,
+      "version": "before"
+    },
+    {
+      "case": "planning",
+      "iterations": 5,
+      "micros_per_iteration": 26306,
+      "allocations_per_iteration": 22537,
+      "allocated_bytes_per_iteration": 12078628,
+      "peak_additional_rust_heap_bytes": 927918,
+      "sample": 4,
+      "version": "after"
+    },
+    {
+      "case": "planning",
+      "iterations": 5,
+      "micros_per_iteration": 26190,
+      "allocations_per_iteration": 33094,
+      "allocated_bytes_per_iteration": 13189034,
+      "peak_additional_rust_heap_bytes": 922798,
+      "sample": 4,
+      "version": "before"
+    },
+    {
+      "case": "sqlite",
+      "iterations": 5,
+      "micros_per_iteration": 54716,
+      "allocations_per_iteration": 4773,
+      "allocated_bytes_per_iteration": 31570537,
+      "peak_additional_rust_heap_bytes": 827043,
+      "sample": 4,
+      "version": "after"
+    },
+    {
+      "case": "sqlite",
+      "iterations": 5,
+      "micros_per_iteration": 66567,
+      "allocations_per_iteration": 4773,
+      "allocated_bytes_per_iteration": 31570537,
+      "peak_additional_rust_heap_bytes": 827043,
+      "sample": 4,
+      "version": "before"
+    },
+    {
+      "case": "memory-search",
+      "iterations": 5,
+      "micros_per_iteration": 17201,
+      "allocations_per_iteration": 3101,
+      "allocated_bytes_per_iteration": 31623044,
+      "peak_additional_rust_heap_bytes": 309637,
+      "sample": 4,
+      "version": "after"
+    },
+    {
+      "case": "memory-search",
+      "iterations": 5,
+      "micros_per_iteration": 18143,
+      "allocations_per_iteration": 3620,
+      "allocated_bytes_per_iteration": 47461124,
+      "peak_additional_rust_heap_bytes": 15807798,
+      "sample": 4,
+      "version": "before"
+    },
+    {
+      "case": "loop",
+      "iterations": 5,
+      "micros_per_iteration": 19544,
+      "allocations_per_iteration": 8879,
+      "allocated_bytes_per_iteration": 9134521,
+      "peak_additional_rust_heap_bytes": 820725,
+      "sample": 5,
+      "version": "before"
+    },
+    {
+      "case": "loop",
+      "iterations": 5,
+      "micros_per_iteration": 19765,
+      "allocations_per_iteration": 8879,
+      "allocated_bytes_per_iteration": 9134521,
+      "peak_additional_rust_heap_bytes": 820725,
+      "sample": 5,
+      "version": "after"
+    },
+    {
+      "case": "planning",
+      "iterations": 5,
+      "micros_per_iteration": 26274,
+      "allocations_per_iteration": 33094,
+      "allocated_bytes_per_iteration": 13189034,
+      "peak_additional_rust_heap_bytes": 922798,
+      "sample": 5,
+      "version": "before"
+    },
+    {
+      "case": "planning",
+      "iterations": 5,
+      "micros_per_iteration": 26297,
+      "allocations_per_iteration": 22537,
+      "allocated_bytes_per_iteration": 12078628,
+      "peak_additional_rust_heap_bytes": 927918,
+      "sample": 5,
+      "version": "after"
+    },
+    {
+      "case": "sqlite",
+      "iterations": 5,
+      "micros_per_iteration": 66562,
+      "allocations_per_iteration": 4773,
+      "allocated_bytes_per_iteration": 31570537,
+      "peak_additional_rust_heap_bytes": 827043,
+      "sample": 5,
+      "version": "before"
+    },
+    {
+      "case": "sqlite",
+      "iterations": 5,
+      "micros_per_iteration": 60012,
+      "allocations_per_iteration": 4773,
+      "allocated_bytes_per_iteration": 31570537,
+      "peak_additional_rust_heap_bytes": 827043,
+      "sample": 5,
+      "version": "after"
+    },
+    {
+      "case": "memory-search",
+      "iterations": 5,
+      "micros_per_iteration": 34013,
+      "allocations_per_iteration": 3620,
+      "allocated_bytes_per_iteration": 47461124,
+      "peak_additional_rust_heap_bytes": 15807798,
+      "sample": 5,
+      "version": "before"
+    },
+    {
+      "case": "memory-search",
+      "iterations": 5,
+      "micros_per_iteration": 17250,
+      "allocations_per_iteration": 3101,
+      "allocated_bytes_per_iteration": 31623044,
+      "peak_additional_rust_heap_bytes": 309637,
+      "sample": 5,
+      "version": "after"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
-use crate::provider::{AnthropicProvider, OpenAiCompatibleProvider};
 use std::{env, error::Error, io, process};
 
 mod cli;
+mod config;
 mod output;
 mod provider;
 mod terminal;
@@ -31,7 +31,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         let path = args
             .next()
             .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| cli::trace_path().into());
+            .unwrap_or_else(|| config::trace_path().into());
         if args.next().is_some() {
             return Err("用法：agent-app --trace-map [JSONL 文件]".into());
         }
@@ -41,44 +41,5 @@ fn run() -> Result<(), Box<dyn Error>> {
     if command.is_some() {
         return Err("支持的参数：--status [运行 ID]、--trace-map [文件]".into());
     }
-    let provider = env::var("RS_AGENT_PROVIDER").unwrap_or_else(|_| "openai".to_owned());
-
-    match provider.as_str() {
-        "openai" | "openai-compatible" => {
-            let api_key = required_environment("OPENAI_API_KEY")?;
-            let model = required_environment("OPENAI_MODEL")?;
-            let stream_usage = match env::var("OPENAI_STREAM_USAGE").as_deref() {
-                Ok("0" | "false") => false,
-                Ok("1" | "true") | Err(env::VarError::NotPresent) => true,
-                _ => return Err("OPENAI_STREAM_USAGE 必须为 true/false 或 1/0".into()),
-            };
-            let mut provider =
-                OpenAiCompatibleProvider::new(api_key, model).with_stream_usage(stream_usage);
-            if let Ok(base_url) = env::var("OPENAI_BASE_URL") {
-                provider = provider.with_base_url(base_url);
-            }
-            cli::run(provider)
-        }
-        "anthropic" => {
-            let api_key = required_environment("ANTHROPIC_API_KEY")?;
-            let model = required_environment("ANTHROPIC_MODEL")?;
-            let max_tokens = env::var("ANTHROPIC_MAX_TOKENS")
-                .ok()
-                .and_then(|value| value.parse().ok())
-                .unwrap_or(1_024);
-            let mut provider = AnthropicProvider::new(api_key, model).with_max_tokens(max_tokens);
-            if let Ok(base_url) = env::var("ANTHROPIC_BASE_URL") {
-                provider = provider.with_base_url(base_url);
-            }
-            cli::run(provider)
-        }
-        other => Err(format!(
-            "不支持的 RS_AGENT_PROVIDER：{other}；可选值为 openai、openai-compatible 或 anthropic"
-        )
-        .into()),
-    }
-}
-
-fn required_environment(name: &str) -> Result<String, Box<dyn Error>> {
-    env::var(name).map_err(|_| format!("缺少环境变量 {name}").into())
+    cli::run(config::model_provider()?)
 }

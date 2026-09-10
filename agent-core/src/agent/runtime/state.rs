@@ -14,6 +14,7 @@ pub(crate) const FORMAT_VERSION: u32 = 1;
 pub enum PauseReason {
     User,
     Budget,
+    TokenBudget,
     Model(String),
     Limit(String),
     ToolResultUnknown(String),
@@ -198,6 +199,10 @@ impl RunState {
         }
         self.limits.validate()?;
         self.prompt_history.validate()?;
+        self.budget.token_usage.validate(
+            self.budget.model_calls,
+            self.phase == LoopPhase::ModelInFlight,
+        )?;
         super::step_budget::validate(self)?;
         if let Some(id) = &self.graph.active {
             if self.graph.coordinator_context.is_none()

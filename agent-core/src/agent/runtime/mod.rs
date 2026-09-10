@@ -35,6 +35,8 @@ mod sqlite;
 mod sqlite_tests;
 mod state;
 mod step_budget;
+mod token_budget;
+pub use token_budget::TokenUsage;
 #[cfg(test)]
 mod step_budget_tests;
 mod store;

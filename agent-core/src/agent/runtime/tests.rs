@@ -329,3 +329,107 @@ fn incomplete_custom_model_response_cannot_execute_tools() {
         &RunStatus::Completed
     );
 }
+
+#[test]
+fn token_budget_survives_resume_and_counts_cached_input_once() {
+    let usage = crate::model::ModelUsage {
+        input_tokens: Some(1000),
+        output_tokens: Some(100),
+        cached_input_tokens: Some(900),
+        reasoning_tokens: Some(20),
+        ..Default::default()
+    };
+    let (mut runtime, count) = runtime(
+        MemoryRunStore::new(),
+        vec![
+            Ok(batch(&["a"]).with_usage(usage)),
+            Ok(ModelResponse::text("continued").with_usage(usage)),
+        ],
+    );
+    runtime
+        .start(
+            "run",
+            "session",
+            "go",
+            Context::new(),
+            RunLimits {
+                max_total_tokens: Some(1500),
+                max_output_tokens: Some(8192),
+                ..RunLimits::new(3)
+            },
+        )
+        .unwrap();
+    let paused = runtime.resume("run", &mut |_| {}).unwrap();
+    assert_eq!(
+        paused.status(),
+        &RunStatus::Paused(PauseReason::TokenBudget)
+    );
+    assert_eq!(paused.budget().model_calls(), 1);
+    assert_eq!(paused.budget().token_usage().total_tokens(), 1100);
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+    runtime.set_token_budget("run", Some(20_000)).unwrap();
+    let done = runtime.resume("run", &mut |_| {}).unwrap();
+    assert_eq!(done.status(), &RunStatus::Completed);
+    assert_eq!(done.budget().token_usage().total_tokens(), 2200);
+    assert_eq!(done.budget().model_calls(), 2);
+}
+
+#[test]
+fn interrupted_process_keeps_reserved_tokens_and_oversized_calls_have_no_effects() {
+    let usage = crate::model::ModelUsage {
+        input_tokens: Some(40),
+        output_tokens: Some(5),
+        ..Default::default()
+    };
+    let (mut runtime, _) = runtime(
+        MemoryRunStore::new(),
+        vec![Ok(ModelResponse::text("done").with_usage(usage))],
+    );
+    runtime
+        .start(
+            "run",
+            "session",
+            "go",
+            Context::new(),
+            RunLimits {
+                max_output_tokens: Some(100),
+                max_total_tokens: Some(20_000),
+                ..RunLimits::new(3)
+            },
+        )
+        .unwrap();
+    let mut state = runtime.state("run").unwrap();
+    state
+        .budget
+        .token_usage
+        .allocate(200, Some(100), Some(20_000), 0)
+        .unwrap();
+    state.budget.model_calls = 1;
+    state.phase = LoopPhase::ModelInFlight;
+    runtime.commit(&mut state).unwrap();
+    let done = runtime.resume("run", &mut |_| {}).unwrap();
+    assert_eq!(done.budget().model_calls(), 2);
+    assert_eq!(done.budget().token_usage().estimated_tokens(), 300);
+    assert_eq!(done.budget().token_usage().total_tokens(), 345);
+}
+
+#[test]
+fn oversized_call_identifiers_are_rejected_before_dispatch() {
+    let (mut runtime, count) =
+        runtime(MemoryRunStore::new(), vec![Ok(batch(&[&"x".repeat(2048)]))]);
+    runtime
+        .start(
+            "run",
+            "session",
+            "go",
+            Context::new(),
+            RunLimits {
+                max_context_bytes: 512,
+                ..RunLimits::new(2)
+            },
+        )
+        .unwrap();
+    assert!(runtime.resume("run", &mut |_| {}).is_err());
+    assert_eq!(count.load(Ordering::SeqCst), 0);
+    assert_eq!(runtime.state("run").unwrap().budget().tool_calls(), 0);
+}

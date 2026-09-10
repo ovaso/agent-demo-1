@@ -65,7 +65,7 @@ impl AnthropicProvider {
         let (system, messages) = messages(request.messages(), request.memories())?;
         Ok(json!({
             "model": self.model,
-            "max_tokens": self.max_tokens,
+            "max_tokens": request.max_output_tokens().unwrap_or(self.max_tokens as u64),
             "system": system,
             "messages": messages,
             "tools": tools(request.tools()),

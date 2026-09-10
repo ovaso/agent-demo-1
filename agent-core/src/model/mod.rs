@@ -24,6 +24,8 @@ pub struct ModelRequest<'a> {
     memories: &'a [Memory],
     tools: &'a [ToolDefinition],
     max_input_bytes: usize,
+    max_output_tokens: Option<u64>,
+    diagnostics: Option<InputDiagnostics>,
 }
 
 impl<'a> ModelRequest<'a> {
@@ -37,7 +39,21 @@ impl<'a> ModelRequest<'a> {
             memories,
             tools,
             max_input_bytes: 1024 * 1024,
+            max_output_tokens: None,
+            diagnostics: None,
         }
+    }
+
+    pub(crate) fn with_diagnostics(mut self, diagnostics: InputDiagnostics) -> Self {
+        self.diagnostics = Some(diagnostics);
+        self
+    }
+    pub fn with_max_output_tokens(mut self, limit: Option<u64>) -> Self {
+        self.max_output_tokens = limit;
+        self
+    }
+    pub fn max_output_tokens(&self) -> Option<u64> {
+        self.max_output_tokens
     }
 
     pub fn with_max_input_bytes(mut self, limit: usize) -> Self {

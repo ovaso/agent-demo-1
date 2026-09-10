@@ -75,6 +75,21 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 )
                 .map_err(RuntimeError::storage)?;
         }
+        let request = ModelRequest::new(messages, &[], &tools)
+            .with_max_input_bytes(state.limits.max_context_bytes);
+        let diagnostics = request.diagnostics().map_err(RuntimeError::storage)?;
+        let Some(allocation) = state.budget.token_usage.allocate(
+            diagnostics.logical_bytes,
+            state.limits.max_output_tokens,
+            state.limits.max_total_tokens,
+            state.budget.model_calls,
+        ) else {
+            state.status = RunStatus::Paused(PauseReason::TokenBudget);
+            return self.commit(state);
+        };
+        let request = request
+            .with_max_output_tokens(allocation.output_limit)
+            .with_diagnostics(diagnostics);
         state.budget.model_calls += 1;
         if let Some(id) = state.graph.active.clone()
             && let Some(policy) = state
@@ -87,8 +102,6 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         }
         state.phase = LoopPhase::ModelInFlight;
         self.commit(state)?;
-        let request = ModelRequest::new(messages, &[], &tools)
-            .with_max_input_bytes(state.limits.max_context_bytes);
         let actor = state.actor();
         let response = model_step::stream(
             &mut self.model,
@@ -104,8 +117,12 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         );
         state.phase = LoopPhase::Model;
         let response = match response {
-            Ok(response) => response,
+            Ok(response) => {
+                state.budget.token_usage.settle(response.usage());
+                response
+            }
             Err(error) => {
+                state.budget.token_usage.settle(Default::default());
                 state.status = RunStatus::Paused(PauseReason::Model(error.to_string()));
                 self.commit(state)?;
                 return Err(error.into());
@@ -114,7 +131,12 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         let stop = response.stop_reason().clone();
         let (text, calls, continuation) = response.into_reply_parts();
         let mut ids = BTreeSet::new();
-        if calls.len() > state.limits.max_calls_per_response
+        if super::serialization::check(
+            &(&text, &calls, &continuation),
+            state.limits.max_context_bytes,
+        )
+        .is_err()
+            || calls.len() > state.limits.max_calls_per_response
             || calls
                 .iter()
                 .any(|call| call.id().is_empty() || !ids.insert(call.id()))
@@ -131,7 +153,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             if let Some(text) = text {
                 state.context.push_assistant(text);
             }
-            state.context.push_user(format!("上一轮响应未完成（{}）。恢复后只继续未完成工作，不要把截断的输出或工具调用当作已执行。", stop.description()));
+            state.context.push_user(format!("上一轮响应未完成（{}）。恢复后只继续未完成工作，不要把截断的输出或工具调用当作已执行。缩小单次输出和工具参数，必要时分批生成，避免重复生成同一段超限内容。", stop.description()));
             state.status = RunStatus::Paused(PauseReason::Model(stop.description().into()));
             return self.commit(state);
         }

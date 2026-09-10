@@ -62,7 +62,9 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         }
         // A request interrupted before its response was committed consumed its attempt.
         if state.phase == LoopPhase::ModelInFlight {
+            state.budget.token_usage.settle(Default::default());
             state.phase = LoopPhase::Model;
+            self.commit(&mut state)?;
         }
         let mut trace = RunTrace::new(&state.session_id);
         trace

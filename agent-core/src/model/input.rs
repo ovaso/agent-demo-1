@@ -7,12 +7,12 @@ use std::{
     io::{self, Write},
 };
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct InputDigest {
     pub bytes: usize,
     pub fingerprint: u64,
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct InputDiagnostics {
     pub system: InputDigest,
     pub history: InputDigest,
@@ -67,6 +67,9 @@ fn digest(value: &impl Serialize) -> Result<InputDigest, ModelError> {
 }
 impl ModelRequest<'_> {
     pub fn diagnostics(&self) -> Result<InputDiagnostics, ModelError> {
+        if let Some(diagnostics) = self.diagnostics {
+            return Ok(diagnostics);
+        }
         let system = digest(&Messages {
             messages: self.messages(),
             system: true,

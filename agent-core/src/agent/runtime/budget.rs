@@ -5,6 +5,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunLimits {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_total_tokens: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_window: Option<crate::context::ContextWindow>,
     #[serde(default)]
     pub memory_limits: crate::memory::MemorySearchLimits,
@@ -27,6 +31,8 @@ impl Default for RunLimits {
         Self {
             memory_limits: Default::default(),
             context_window: None,
+            max_total_tokens: None,
+            max_output_tokens: None,
             max_delegations: default_delegations(),
             max_steps: 8,
             step_extension: None,
@@ -65,6 +71,9 @@ impl RunLimits {
         {
             return Err(RuntimeError::Invalid("启用记忆时字节上限必须大于零".into()));
         }
+        if self.max_total_tokens == Some(0) || self.max_output_tokens == Some(0) {
+            return Err(RuntimeError::Invalid("Token 上限必须大于零".into()));
+        }
         if let Some(window) = self.context_window {
             window
                 .validate(self.max_context_bytes)
@@ -83,6 +92,8 @@ fn default_delegations() -> usize {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunBudget {
+    #[serde(default)]
+    pub(crate) token_usage: super::TokenUsage,
     pub(crate) model_calls: u64,
     pub(crate) tool_calls: u64,
     pub(crate) transitions: u64,
@@ -91,6 +102,9 @@ pub struct RunBudget {
 }
 
 impl RunBudget {
+    pub fn token_usage(&self) -> &super::TokenUsage {
+        &self.token_usage
+    }
     pub fn model_calls(&self) -> u64 {
         self.model_calls
     }

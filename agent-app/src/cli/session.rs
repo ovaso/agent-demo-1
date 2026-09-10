@@ -149,6 +149,20 @@ impl<M: ModelProvider> Session<M> {
                 let id = self.id(id)?;
                 view::print_status(&self.runtime.cancel(&id)?);
             }
+            Command::Tokens(limit) => {
+                let id = self.id(None)?;
+                let state = if let Some(limit) = limit {
+                    self.runtime
+                        .set_token_budget(&id, (limit > 0).then_some(limit))?
+                } else {
+                    self.runtime.state(&id)?
+                };
+                view::print_status(&state);
+            }
+            Command::OutputBudget(limit) => {
+                let id = self.id(None)?;
+                view::print_status(&self.runtime.set_output_budget(&id, limit)?);
+            }
             Command::Budget(max_steps, id) => {
                 let id = self.id(id)?;
                 view::print_status(&self.runtime.set_max_steps(&id, max_steps)?);

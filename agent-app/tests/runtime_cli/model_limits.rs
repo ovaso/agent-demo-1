@@ -71,3 +71,36 @@ fn length_stop_never_executes_tools_even_when_arguments_are_valid_json() {
         );
     }
 }
+
+#[test]
+fn cli_token_budget_is_durable_and_output_limit_is_sent_to_provider() {
+    let fixture = Fixture::new();
+    std::fs::write(fixture.directory.join("a.txt"), "evidence").unwrap();
+    let result = fixture.run_with_environment(
+        Provider::OpenAi,
+        "inspect\n/exit\n",
+        &[Step::tools(
+            "main",
+            vec![call("r", "read_file", json!({"path":"a.txt"}))],
+        )],
+        &[("RS_AGENT_MAX_TOTAL_TOKENS", Some("25000"))],
+    );
+    assert_eq!(result.requests[0]["max_tokens"], 8192);
+    let paused = fixture.state();
+    assert_eq!(
+        paused.status(),
+        &RunStatus::Paused(PauseReason::TokenBudget)
+    );
+    let used = paused.budget().token_usage().total_tokens();
+    assert!(used > 0);
+    let result = fixture.run(
+        Provider::OpenAi,
+        "/tokens 100000\n/output-budget 4096\n/resume\n/exit\n",
+        &[Step::text("main", "done")],
+    );
+    assert_eq!(result.requests[0]["max_tokens"], 4096);
+    let done = fixture.state();
+    assert_eq!(done.status(), &RunStatus::Completed);
+    assert!(done.budget().token_usage().total_tokens() > used);
+    assert_eq!(done.budget().model_calls(), 2);
+}

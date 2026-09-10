@@ -34,6 +34,8 @@ impl RuntimeConfig {
                 step_extension: step_extension_policy(environment, max_steps)?,
                 memory_limits: prompt::memory_limits(environment)?,
                 context_window: prompt::context_window(environment)?,
+                max_total_tokens: prompt::total_tokens(environment)?,
+                max_output_tokens: Some(prompt::output_tokens(environment)?),
                 max_context_bytes: prompt::number(
                     environment,
                     "RS_AGENT_MAX_CONTEXT_BYTES",
@@ -121,6 +123,8 @@ pub(crate) fn model_provider(
             if let Ok(base_url) = environment.var("OPENAI_BASE_URL") {
                 provider = provider.with_base_url(base_url);
             }
+            provider =
+                provider.with_max_tokens_field(environment.var("OPENAI_MAX_TOKENS_FIELD").ok())?;
             Ok(ConfiguredProvider::OpenAi(provider))
         }
         "anthropic" => {

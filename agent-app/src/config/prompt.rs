@@ -57,3 +57,28 @@ pub(super) fn context_window(
     window.validate(hard).map_err(|e| e.to_string())?;
     Ok(Some(window))
 }
+
+pub(super) fn total_tokens(environment: &Environment) -> Result<Option<u64>, String> {
+    let limit = environment
+        .var("RS_AGENT_MAX_TOTAL_TOKENS")
+        .map_or(Ok(2_000_000), |v| v.parse::<u64>())
+        .map_err(|_| "RS_AGENT_MAX_TOTAL_TOKENS 必须为非负整数".to_string())?;
+    Ok((limit > 0).then_some(limit))
+}
+pub(super) fn output_tokens(environment: &Environment) -> Result<u64, String> {
+    let fallback = if environment.var("RS_AGENT_PROVIDER").as_deref() == Ok("anthropic") {
+        environment.var("ANTHROPIC_MAX_TOKENS").ok()
+    } else {
+        None
+    };
+    let limit = environment
+        .var("RS_AGENT_MAX_OUTPUT_TOKENS")
+        .ok()
+        .or(fallback)
+        .map_or(Ok(8192), |v| v.parse::<u64>())
+        .map_err(|_| "RS_AGENT_MAX_OUTPUT_TOKENS 必须为正整数".to_string())?;
+    if limit == 0 {
+        return Err("RS_AGENT_MAX_OUTPUT_TOKENS 必须大于零".into());
+    }
+    Ok(limit)
+}

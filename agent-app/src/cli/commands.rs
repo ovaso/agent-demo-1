@@ -16,6 +16,8 @@ pub(super) enum Command<'a> {
     Messages(Option<&'a str>),
     Message(&'a str, &'a str),
     Reply(&'a str, &'a str),
+    Tokens(Option<u64>),
+    OutputBudget(u64),
     Help,
     Trace,
     Reset,
@@ -38,6 +40,23 @@ pub(super) fn parse(input: &str) -> Result<Command<'_>, String> {
     }
     let (name, rest) = split(trimmed);
     match name {
+        "/tokens" => Ok(Command::Tokens(if rest.is_empty() {
+            None
+        } else {
+            Some(
+                rest.parse()
+                    .map_err(|_| "用法：/tokens [总额度，0 关闭]".to_string())?,
+            )
+        })),
+        "/output-budget" => {
+            let limit = rest
+                .parse::<u64>()
+                .map_err(|_| "用法：/output-budget <正整数>".to_string())?;
+            if limit == 0 {
+                return Err("输出上限必须大于零".into());
+            }
+            Ok(Command::OutputBudget(limit))
+        }
         "/start" if !rest.is_empty() => Ok(Command::Start(rest)),
         "/plan" => Ok(Command::Plan(if rest.is_empty() {
             None

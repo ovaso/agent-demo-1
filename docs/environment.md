@@ -92,3 +92,15 @@ RS_AGENT_ENV_FILE=.env.production cargo run -p agent-app
 
 有效范围：256 <= 摘录上限 < 低水位 < 高水位 <= RS_AGENT_MAX_CONTEXT_BYTES。
 会话水位与实际传输 JSON 大小口径不同；发送前仍校验完整 Provider 请求硬上限。
+
+## Token 预算
+
+| 变量 | 默认值 | 用途 |
+|---|---:|---|
+| `RS_AGENT_MAX_TOTAL_TOKENS` | `2000000` | 单个根任务的累计输入加输出预算，0 关闭累计限制 |
+| `RS_AGENT_MAX_OUTPUT_TOKENS` | `8192` | 每次输出上限，必须大于零；Anthropic 可沿用显式 ANTHROPIC_MAX_TOKENS |
+| `OPENAI_MAX_TOKENS_FIELD` | 按主机选择 | 官方 OpenAI 使用 max_completion_tokens，其他兼容服务使用 max_tokens；可显式指定其一 |
+
+`/tokens` 查看；`/tokens <新总额度>` 调整当前任务；`/tokens 0` 关闭累计限制。
+`/output-budget <数量>` 调整当前任务单次输出上限，随后 `/resume` 继续。
+这些操作不重置已用步数、续期次数或已记录用量，模型不能自行提高根额度。

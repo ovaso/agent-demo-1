@@ -26,6 +26,7 @@ pub struct OpenAiCompatibleProvider {
     model: String,
     base_url: String,
     stream_usage: bool,
+    max_tokens_field: Option<String>,
 }
 
 impl OpenAiCompatibleProvider {
@@ -36,6 +37,7 @@ impl OpenAiCompatibleProvider {
             model: model.into(),
             base_url: DEFAULT_BASE_URL.to_owned(),
             stream_usage: true,
+            max_tokens_field: None,
         }
     }
 
@@ -50,18 +52,46 @@ impl OpenAiCompatibleProvider {
         self
     }
 
+    pub(crate) fn with_max_tokens_field(
+        mut self,
+        field: Option<String>,
+    ) -> Result<Self, ModelError> {
+        if field
+            .as_deref()
+            .is_some_and(|f| !matches!(f, "max_tokens" | "max_completion_tokens"))
+        {
+            return Err(ModelError::new(
+                "OPENAI_MAX_TOKENS_FIELD 必须为 max_tokens 或 max_completion_tokens",
+            ));
+        }
+        self.max_tokens_field = field;
+        Ok(self)
+    }
+
     fn request_body(&self, request: &ModelRequest<'_>) -> Result<Value, ModelError> {
         super::continuation::validate(
             request,
             super::continuation::OPENAI,
             &super::continuation::binding(super::continuation::OPENAI, &self.model, &self.base_url),
         )?;
-        Ok(json!({
+        let mut body = json!({
             "model": self.model,
             "messages": messages(request.messages(), request.memories())?,
             "tools": tools(request.tools()),
             "tool_choice": "auto",
-        }))
+        });
+        if let Some(limit) = request.max_output_tokens() {
+            let first_party = reqwest::Url::parse(&self.base_url)
+                .ok()
+                .is_some_and(|u| u.host_str() == Some("api.openai.com"));
+            let field = self.max_tokens_field.as_deref().unwrap_or(if first_party {
+                "max_completion_tokens"
+            } else {
+                "max_tokens"
+            });
+            body[field] = json!(limit);
+        }
+        Ok(body)
     }
 }
 

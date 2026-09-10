@@ -3,6 +3,7 @@ use agent_core::agent::runtime::{LoopPhase, PauseReason, RunState, RunStatus};
 use std::{error::Error, io};
 
 pub(super) fn print_status(state: &RunState) {
+    print_tokens(state);
     println!(
         "执行方式：{:?}；待切换：{:?}；活动节点：{:?}",
         state.routing().mode(),
@@ -165,6 +166,8 @@ pub(super) fn print_plan(state: &RunState) {
 pub(super) fn help() {
     println!(
         "命令：
+  /tokens [总额度]       查看或设置当前任务累计 Token 上限，0 关闭
+  /output-budget <数量>  设置当前任务单次输出上限
   /start <任务>          建立任务，随后可用 /step 逐步执行
   /plan <任务>          只调查和规划，不执行写入
   /plan                 查看当前计划
@@ -200,4 +203,38 @@ Enter 发送，Ctrl+J / Alt+Enter 换行；Ctrl+C 取消输入，Ctrl+D 退出�
 pub(super) fn show_trace(path: &str) -> Result<(), Box<dyn Error>> {
     trace_map::show(path, &mut io::stdout().lock())?;
     Ok(())
+}
+
+fn print_tokens(state: &RunState) {
+    let usage = state.budget().token_usage();
+    let unmetered = usage.unmetered_requests().saturating_add(
+        state
+            .budget()
+            .model_calls()
+            .saturating_sub(usage.accounted_requests()),
+    );
+    println!(
+        "Token：已报告输入/输出 {}/{}；缺失用量估算 {}；预留 {}；历史未计量请求 {}。",
+        usage.input_tokens(),
+        usage.output_tokens(),
+        usage.estimated_tokens(),
+        usage.reserved_tokens(),
+        unmetered
+    );
+    if let Some(limit) = state.limits().max_total_tokens {
+        println!(
+            "Token 总额度：{} / {}；剩余 {}。",
+            usage.total_tokens(),
+            limit,
+            limit.saturating_sub(usage.total_tokens())
+        );
+    }
+    if let Some(limit) = state.limits().max_output_tokens {
+        println!("单次输出上限：{limit} Token。");
+    }
+    if matches!(state.status(), RunStatus::Paused(PauseReason::TokenBudget)) {
+        println!(
+            "Token 额度不足以发送下一轮，或历史用量不完整。用 /tokens 查看或设置总额度，再 /resume；/tokens 0 关闭累计限制。步骤及输入输出边界继续生效。"
+        );
+    }
 }

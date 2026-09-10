@@ -13,6 +13,8 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 struct Overview<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    token_budget: Option<TokenBudgetView>,
     active_node: Option<&'a str>,
     actor: &'a str,
     agent_budget: Option<&'a AgentPolicy>,
@@ -28,6 +30,16 @@ struct Overview<'a> {
     plan_version: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     step_budget: Option<StepBudgetView<'a>>,
+}
+
+#[derive(Serialize)]
+struct TokenBudgetView {
+    limit: u64,
+    used: u64,
+    remaining: u64,
+    max_output: Option<u64>,
+    estimated: u64,
+    unmetered_requests: u64,
 }
 
 #[derive(Serialize)]
@@ -76,7 +88,16 @@ pub(super) fn value(state: &RunState) -> Result<serde_json::Value, RuntimeError>
         })
         .collect();
     let actor = state.actor();
+    let usage = state.budget.token_usage();
     let overview = Overview {
+        token_budget: state.limits.max_total_tokens.map(|limit| TokenBudgetView {
+            limit,
+            used: usage.total_tokens(),
+            remaining: limit.saturating_sub(usage.total_tokens()),
+            max_output: state.limits.max_output_tokens,
+            estimated: usage.estimated_tokens(),
+            unmetered_requests: usage.unmetered_requests(),
+        }),
         active_node: active_id,
         actor: &actor,
         agent_budget: state.agent_policy(),

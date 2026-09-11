@@ -9,10 +9,10 @@
 | 主题 | 入口 | 内容 |
 | --- | --- | --- |
 | Context | [上下文调研与设计](context/README.md) | CH、上下文有效性、Epoch、动态选取与压缩配置设计，以及现有缓存和输入预算实现 |
-| Runtime | [Loop、Graph 与多 Agent](runtime/README.md) | 执行设计、规划与路由、委托和消息协作、实现状态及 CLI |
+| Runtime | [Loop、Graph 与多 Agent](runtime/README.md) | Shell/任务入口与运行事实设计、主/子 Agent 统一规格、规划与路由、工作板协作、实现状态及 CLI |
 | Tracing | [调用树与运行时序](tracing/README.md) | 轨迹查看、调用关系、耗时、Token 与缓存指标 |
 | Budget | [有界预算续期](budget/README.md) | 执行额度、有限续期、恢复语义与操作入口 |
-| Common | [通用开发](common/README.md) | 配置、环境变量等独立于 Agent 领域的开发主题 |
+| Common | [通用开发](common/README.md) | 设计驱动流程、配置、环境变量、指标暴露与性能观测等通用开发准则 |
 | Tools | [工具开发](tools/README.md) | 工具宏、自动注册、分组、状态注入与开发边界 |
 
 首次运行可先阅读[启动环境配置](common/environment.md)和[运行时 CLI](runtime/03-runtime-cli.md)；修改代码前查看根 [AGENTS.md](../AGENTS.md) 中的项目约定与验证要求。

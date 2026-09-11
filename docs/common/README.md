@@ -10,6 +10,7 @@
 | --- | --- |
 | [设计文档驱动开发](design-driven-development.md) | 设计依据、确认与演进、实现流程、问题排查和验收约定 |
 | [环境与启动配置](environment.md) | 配置来源与覆盖规则、解析与校验、生效时间，以及本项目的变量和使用示例 |
+| [指标暴露与性能观测](observability-and-performance.md) | 主动提供 Metric / Snapshot、采集成本与语义、成熟 Agent/SDK 优先的性能观测方式及接入边界 |
 
 ## 归类与维护约定
 

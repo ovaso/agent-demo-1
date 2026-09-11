@@ -2,6 +2,8 @@
 
 [文档总索引](../README.md)
 
+通用的 Metric/Snapshot 暴露、性能采样与监控平台接入遵循[指标暴露与性能观测](../common/observability-and-performance.md)。该准则不表示本项目已接入 SkyWalking 等后端，也不改变本文记录的现有 JSONL 追踪和错误传播行为。
+
 每次 `Agent::run` / `run_stream` 生成独立 `run_id`，同一会话的多次输入不会混在一起。
 应用默认追加到 `agent-trace.jsonl`，可用 `RS_AGENT_TRACE_FILE` 指定路径。
 

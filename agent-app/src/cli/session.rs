@@ -5,7 +5,7 @@ use agent_core::{
         RunLimits, RunOptions, RunState, RunStatus, Runtime, SqliteRunStore, WorkIntent,
     },
     memory::MarkdownMemoryStore,
-    model::ModelProvider,
+    model::{ModelProvider, ModelStreamEvent},
     tool::Registry,
     trace::FileTraceSink,
 };
@@ -101,15 +101,15 @@ impl<M: ModelProvider> Session<M> {
         io::stdout().flush()?;
         let mut output = crate::output::StreamingOutput::new(io::stdout().lock());
         let mut output_error = None;
-        let mut emit = |delta: &str| {
+        let mut emit = |event: ModelStreamEvent<'_>| {
             if output_error.is_none() {
-                output_error = output.push(delta).err();
+                output_error = output.push_event(event).err();
             }
         };
         let result = if single_step {
-            self.runtime.advance(id, &mut emit)
+            self.runtime.advance_events(id, &mut emit)
         } else {
-            self.runtime.resume(id, &mut emit)
+            self.runtime.resume_events(id, &mut emit)
         };
         if let Some(error) = output_error {
             return Err(error.into());

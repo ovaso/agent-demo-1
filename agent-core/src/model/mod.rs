@@ -77,7 +77,17 @@ impl<'a> ModelRequest<'a> {
     }
 }
 
-/// 模型服务在 Agent loop 中需要实现的最小能力。
+/// 厂商公开返回的可展示增量；不包含签名、加密块等 opaque 续接信息。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelStreamEvent<'a> {
+    TextDelta(&'a str),
+    ReasoningDelta(&'a str),
+}
+
+/// 模型服务在 Agent loop 中需要实现的最小能力，也是所有适配器的公共 contract。
+///
+/// 实现方负责鉴权、传输、厂商请求/响应转换和增量事件解析；核心只消费这些
+/// 通用模型类型。实现可位于任意 crate，无需依赖某个 vendor 支持库或 HTTP。
 pub trait ModelProvider {
     /// 用于追踪的模型标识；不应包含密钥或请求内容。
     fn model_name(&self) -> &str {
@@ -97,6 +107,17 @@ pub trait ModelProvider {
             on_text_delta(text);
         }
         Ok(response)
+    }
+
+    /// 通用展示事件。旧 provider 的文本流仍然增量转发；支持思考流的实现应重写此方法。
+    fn stream_events(
+        &mut self,
+        request: ModelRequest<'_>,
+        on_event: &mut dyn FnMut(ModelStreamEvent<'_>),
+    ) -> Result<ModelResponse, ModelError> {
+        self.stream(request, &mut |text| {
+            on_event(ModelStreamEvent::TextDelta(text))
+        })
     }
 }
 

@@ -1,5 +1,7 @@
 use super::Environment;
-use crate::provider::{AnthropicProvider, ConfiguredProvider, OpenAiCompatibleProvider};
+use crate::provider::{
+    AnthropicProvider, ConfiguredProvider, DeepSeekProvider, OpenAiCompatibleProvider,
+};
 use std::{env, error::Error};
 
 pub(crate) fn model_provider(
@@ -23,11 +25,27 @@ pub(crate) fn model_provider(
             if let Ok(base_url) = environment.var("OPENAI_BASE_URL") {
                 provider = provider.with_base_url(base_url);
             }
-            provider =
-                provider.with_max_tokens_field(environment.var("OPENAI_MAX_TOKENS_FIELD").ok())?;
-            provider =
-                provider.with_reasoning_effort(environment.var("OPENAI_REASONING_EFFORT").ok())?;
+            provider = provider
+                .with_max_tokens_field(environment.var("OPENAI_MAX_TOKENS_FIELD").ok())
+                .map_err(|error| format!("OPENAI_MAX_TOKENS_FIELD：{error}"))?;
+            provider = provider
+                .with_reasoning_effort(environment.var("OPENAI_REASONING_EFFORT").ok())
+                .map_err(|error| format!("OPENAI_REASONING_EFFORT：{error}"))?;
             Ok(ConfiguredProvider::OpenAi(provider))
+        }
+        "deepseek" => {
+            let api_key = required_environment(environment, "DEEPSEEK_API_KEY")?;
+            let model = required_environment(environment, "DEEPSEEK_MODEL")?;
+            let effort = environment
+                .var("DEEPSEEK_REASONING_EFFORT")
+                .unwrap_or_else(|_| "default".into())
+                .parse::<agent_vendor_deepseek::ReasoningEffort>()
+                .map_err(|error| format!("DEEPSEEK_REASONING_EFFORT：{error}"))?;
+            let mut provider = DeepSeekProvider::new(api_key, model).with_reasoning_effort(effort);
+            if let Ok(base_url) = environment.var("DEEPSEEK_BASE_URL") {
+                provider = provider.with_base_url(base_url);
+            }
+            Ok(ConfiguredProvider::DeepSeek(provider))
         }
         "anthropic" => {
             let api_key = required_environment(environment, "ANTHROPIC_API_KEY")?;
@@ -43,12 +61,14 @@ pub(crate) fn model_provider(
             if let Ok(base_url) = environment.var("ANTHROPIC_BASE_URL") {
                 provider = provider.with_base_url(base_url);
             }
-            provider =
-                provider.with_cache_ttl(environment.var("ANTHROPIC_CACHE_TTL").ok().as_deref())?;
+            provider = provider
+                .with_cache_ttl(environment.var("ANTHROPIC_CACHE_TTL").ok().as_deref())
+                .map_err(|error| format!("ANTHROPIC_CACHE_TTL：{error}"))?;
             Ok(ConfiguredProvider::Anthropic(provider))
         }
         _ => Err(
-            "不支持的 RS_AGENT_PROVIDER；可选值为 openai、openai-compatible 或 anthropic".into(),
+            "不支持的 RS_AGENT_PROVIDER；可选值为 openai、openai-compatible、deepseek 或 anthropic"
+                .into(),
         ),
     }
 }

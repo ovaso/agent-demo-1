@@ -34,7 +34,7 @@ fn example(text: &str) -> &str {
 }
 ```
 
-宏选项与状态注入见[工具开发文档](../docs/tool-development.md)。`register` 收集所有实际链接的默认组工具，因此宿主也可通过自身已编译模块添加默认组工具。重复工具名会报错，并保持原注册表不变。
+宏选项与状态注入见[工具开发文档](../docs/tools/README.md)。`register` 收集所有实际链接的默认组工具，因此宿主也可通过自身已编译模块添加默认组工具。重复工具名会报错，并保持原注册表不变。
 
 只直接依赖关闭默认 features 的 `agent-core` 与现有 `serde_json`；不绑定 SQLite、模型服务、终端渲染或 CLI。单独验证：
 

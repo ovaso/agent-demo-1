@@ -9,14 +9,15 @@ syntax-highlighting = ["agent-render-cmd/syntax-highlighting"]
 math = ["agent-render-cmd/math"]
 
 [dependencies]
+agent-vendor-deepseek = { path = "../agent-vendor-deepseek" }
+agent-vendor-openai = { path = "../agent-vendor-openai" }
+agent-vendor-anthropic = { path = "../agent-vendor-anthropic" }
 dotenvy = { version = "0.15.7", default-features = false }
 agent-core = { path = "../agent-core", features = ["sqlite"] }
 agent-app-tool = { path = "../agent-app-tool" }
 agent-render-cmd = { path = "../agent-render-cmd" }
 agent-tool-debug = { path = "../agent-tool-debug" }
-reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }
 rustyline = "18"
-serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 terminal_size = { version = "0.4", default-features = false }
 unicode-segmentation = { version = "1.13", default-features = false }

@@ -1,7 +1,7 @@
 use super::super::{LoopPhase, PauseReason, RunState, RunStatus, RunStore, Runtime, RuntimeError};
 use crate::{
     memory::{Memory, MemoryStore},
-    model::ModelProvider,
+    model::{ModelProvider, ModelStreamEvent},
     trace::{RunTrace, TraceSink},
 };
 use serde_json::json;
@@ -13,7 +13,11 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         id: &str,
         on_text: &mut dyn FnMut(&str),
     ) -> Result<RunState, RuntimeError> {
-        self.drive(id, on_text, false)
+        self.advance_events(id, &mut |event| {
+            if let ModelStreamEvent::TextDelta(text) = event {
+                on_text(text);
+            }
+        })
     }
 
     /// 沿用原输入与预算，直到完成、暂停或失败；不会自动重跑未知工具。
@@ -22,13 +26,35 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         id: &str,
         on_text: &mut dyn FnMut(&str),
     ) -> Result<RunState, RuntimeError> {
-        self.drive(id, on_text, true)
+        self.resume_events(id, &mut |event| {
+            if let ModelStreamEvent::TextDelta(text) = event {
+                on_text(text);
+            }
+        })
+    }
+
+    /// 推进一个阶段，并分别回调答案与可展示的思考增量。
+    pub fn advance_events(
+        &mut self,
+        id: &str,
+        on_event: &mut dyn FnMut(ModelStreamEvent<'_>),
+    ) -> Result<RunState, RuntimeError> {
+        self.drive(id, on_event, false)
+    }
+
+    /// 恢复执行，并增量转发模型展示事件。
+    pub fn resume_events(
+        &mut self,
+        id: &str,
+        on_event: &mut dyn FnMut(ModelStreamEvent<'_>),
+    ) -> Result<RunState, RuntimeError> {
+        self.drive(id, on_event, true)
     }
 
     fn drive(
         &mut self,
         id: &str,
-        on_text: &mut dyn FnMut(&str),
+        on_event: &mut dyn FnMut(ModelStreamEvent<'_>),
         continuous: bool,
     ) -> Result<RunState, RuntimeError> {
         let _lease = self.store.acquire()?;
@@ -82,7 +108,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             .map_err(RuntimeError::from)?;
         let result = (|| {
             loop {
-                self.step(&mut state, on_text, &mut trace)?;
+                self.step(&mut state, on_event, &mut trace)?;
                 if !continuous || state.status != RunStatus::Running {
                     return Ok(());
                 }
@@ -102,7 +128,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
     fn step(
         &mut self,
         state: &mut RunState,
-        on_text: &mut dyn FnMut(&str),
+        on_event: &mut dyn FnMut(ModelStreamEvent<'_>),
         trace: &mut RunTrace,
     ) -> Result<(), RuntimeError> {
         if state.budget.transitions >= state.limits.max_transitions {
@@ -114,7 +140,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
             return Ok(());
         }
         match &state.phase {
-            LoopPhase::Model => self.call_model(state, on_text, trace),
+            LoopPhase::Model => self.call_model(state, on_event, trace),
             LoopPhase::Tools => self.call_tool(state, trace),
             LoopPhase::FinishSession { summary } => {
                 let summary = summary.clone();

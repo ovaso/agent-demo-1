@@ -4,7 +4,7 @@ use super::{Agent, AgentError, AgentResult};
 use crate::{
     context::{Context, ContextStore, Message},
     memory::MemoryStore,
-    model::{ModelProvider, ModelRequest},
+    model::{ModelProvider, ModelRequest, ModelStreamEvent},
     trace::{RunTrace, TraceEvent, TraceSink},
 };
 
@@ -26,7 +26,7 @@ pub(super) fn run_stream<M, C, S, T>(
     agent: &mut Agent<M, C, S, T>,
     session_id: &str,
     input: String,
-    on_text_delta: &mut dyn FnMut(&str),
+    on_event: &mut dyn FnMut(ModelStreamEvent<'_>),
 ) -> Result<AgentResult, AgentError>
 where
     M: ModelProvider,
@@ -34,14 +34,14 @@ where
     S: MemoryStore,
     T: TraceSink,
 {
-    run_inner(agent, session_id, input, Some(on_text_delta))
+    run_inner(agent, session_id, input, Some(on_event))
 }
 
 fn run_inner<M, C, S, T>(
     agent: &mut Agent<M, C, S, T>,
     session_id: &str,
     input: String,
-    on_text_delta: Option<&mut dyn FnMut(&str)>,
+    on_event: Option<&mut dyn FnMut(ModelStreamEvent<'_>)>,
 ) -> Result<AgentResult, AgentError>
 where
     M: ModelProvider,
@@ -51,7 +51,7 @@ where
 {
     let mut trace = RunTrace::new(session_id);
     trace.start(&mut agent.trace_sink, "agent.run", json!({}))?;
-    let result = execute(agent, session_id, input, on_text_delta, &mut trace);
+    let result = execute(agent, session_id, input, on_event, &mut trace);
     let recorded = trace.finish(&mut agent.trace_sink, result.as_ref().err());
     let value = result?;
     recorded?;
@@ -62,7 +62,7 @@ fn execute<M, C, S, T>(
     agent: &mut Agent<M, C, S, T>,
     session_id: &str,
     input: String,
-    mut on_text_delta: Option<&mut dyn FnMut(&str)>,
+    mut on_event: Option<&mut dyn FnMut(ModelStreamEvent<'_>)>,
     trace: &mut RunTrace,
 ) -> Result<AgentResult, AgentError>
 where
@@ -134,18 +134,19 @@ where
                 session_id,
                 step,
             },
-            on_text_delta
+            on_event
                 .as_deref_mut()
-                .map(|callback| callback as &mut dyn FnMut(&str)),
+                .map(|callback| callback as &mut dyn FnMut(ModelStreamEvent<'_>)),
         )?;
-        if !response.stop_reason().is_complete() {
-            if let Some(text) = response.text_content() {
-                context.push_assistant(text);
+        let stop = response.stop_reason().clone();
+        let (text, calls, continuation) = response.into_reply_parts();
+        if !stop.is_complete() {
+            if let Some(text) = text {
+                context.push(Message::assistant_reply(text, Vec::new(), continuation));
             }
             agent.context_store.save(session_id, &context)?;
-            return Err(crate::model::ModelError::new(response.stop_reason().description()).into());
+            return Err(crate::model::ModelError::new(stop.description()).into());
         }
-        let (text, calls, continuation) = response.into_reply_parts();
 
         if calls.is_empty() {
             let text = text.ok_or(AgentError::EmptyModelResponse)?;

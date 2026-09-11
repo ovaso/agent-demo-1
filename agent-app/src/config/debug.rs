@@ -23,6 +23,15 @@ pub(crate) fn debug_snapshot(
             entry(&mut output, "OPENAI_MODEL", provider.model_name());
             entry(&mut output, "OPENAI_STREAM_USAGE", provider.stream_usage());
         }
+        ConfiguredProvider::DeepSeek(provider) => {
+            entry(&mut output, "DEEPSEEK_BASE_URL", provider.base_url());
+            entry(&mut output, "DEEPSEEK_MODEL", provider.model_name());
+            entry(
+                &mut output,
+                "DEEPSEEK_REASONING_EFFORT",
+                provider.reasoning_effort(),
+            );
+        }
         ConfiguredProvider::Anthropic(provider) => {
             entry(&mut output, "ANTHROPIC_BASE_URL", provider.base_url());
             entry(&mut output, "ANTHROPIC_MODEL", provider.model_name());

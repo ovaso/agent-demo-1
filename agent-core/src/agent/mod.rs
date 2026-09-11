@@ -216,12 +216,26 @@ where
         runner::run(self, session_id, input.into())
     }
 
+    /// 增量接收答案和厂商公开的思考内容。
+    pub fn run_stream_events(
+        &mut self,
+        session_id: &str,
+        input: impl Into<String>,
+        on_event: &mut dyn FnMut(crate::model::ModelStreamEvent<'_>),
+    ) -> Result<AgentResult, AgentError> {
+        runner::run_stream(self, session_id, input.into(), on_event)
+    }
+
     pub fn run_stream(
         &mut self,
         session_id: &str,
         input: impl Into<String>,
         on_text_delta: &mut dyn FnMut(&str),
     ) -> Result<AgentResult, AgentError> {
-        runner::run_stream(self, session_id, input.into(), on_text_delta)
+        self.run_stream_events(session_id, input, &mut |event| {
+            if let crate::model::ModelStreamEvent::TextDelta(text) = event {
+                on_text_delta(text);
+            }
+        })
     }
 }

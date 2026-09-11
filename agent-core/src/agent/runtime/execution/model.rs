@@ -7,7 +7,7 @@ use crate::agent::{
 use crate::{
     context::Message,
     memory::MemoryStore,
-    model::{ModelProvider, ModelRequest},
+    model::{ModelProvider, ModelRequest, ModelStreamEvent},
     trace::{RunTrace, TraceSink},
 };
 use std::collections::BTreeSet;
@@ -16,7 +16,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
     pub(in crate::agent::runtime) fn call_model(
         &mut self,
         state: &mut RunState,
-        on_text: &mut dyn FnMut(&str),
+        on_event: &mut dyn FnMut(ModelStreamEvent<'_>),
         trace: &mut RunTrace,
     ) -> Result<(), RuntimeError> {
         if state.budget.model_calls >= state.limits.max_steps {
@@ -119,7 +119,7 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
                 session_id: &state.session_id,
                 step: state.budget.model_calls as usize,
             },
-            Some(on_text),
+            Some(on_event),
         );
         state.phase = LoopPhase::Model;
         let response = match response {
@@ -157,7 +157,9 @@ impl<M: ModelProvider, R: RunStore, S: MemoryStore, T: TraceSink> Runtime<M, R, 
         }
         if !stop.is_complete() {
             if let Some(text) = text {
-                state.context.push_assistant(text);
+                state
+                    .context
+                    .push(Message::assistant_reply(text, Vec::new(), continuation));
             }
             state.context.push_user(format!("上一轮响应未完成（{}）。恢复后只继续未完成工作，不要把截断的输出或工具调用当作已执行。缩小单次输出和工具参数，必要时分批生成，避免重复生成同一段超限内容。", stop.description()));
             state.status = RunStatus::Paused(PauseReason::Model(stop.description().into()));

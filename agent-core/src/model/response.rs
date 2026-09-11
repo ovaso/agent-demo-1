@@ -28,6 +28,7 @@ impl StopReason {
 #[derive(Debug, Clone)]
 pub struct ModelResponse {
     text: Option<String>,
+    reasoning: Option<String>,
     tool_calls: Vec<ToolCall>,
     usage: ModelUsage,
     stop_reason: StopReason,
@@ -40,6 +41,7 @@ impl ModelResponse {
     pub fn text(text: impl Into<String>) -> Self {
         Self {
             text: Some(text.into()),
+            reasoning: None,
             tool_calls: Vec::new(),
             usage: ModelUsage::default(),
             stop_reason: StopReason::Complete,
@@ -52,6 +54,7 @@ impl ModelResponse {
     pub fn tool_calls(tool_calls: Vec<ToolCall>) -> Self {
         Self {
             text: None,
+            reasoning: None,
             tool_calls,
             usage: ModelUsage::default(),
             stop_reason: StopReason::Complete,
@@ -75,6 +78,16 @@ impl ModelResponse {
 
     pub fn text_content(&self) -> Option<&str> {
         self.text.as_deref()
+    }
+
+    /// 可展示的思考内容，与答案和厂商续接数据分别处理。
+    pub fn with_reasoning(mut self, reasoning: Option<String>) -> Self {
+        self.reasoning = reasoning;
+        self
+    }
+
+    pub fn reasoning_content(&self) -> Option<&str> {
+        self.reasoning.as_deref()
     }
 
     pub fn with_usage(mut self, usage: ModelUsage) -> Self {

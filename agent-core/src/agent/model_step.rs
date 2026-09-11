@@ -1,6 +1,6 @@
 use super::AgentError;
 use crate::{
-    model::{ModelProvider, ModelRequest, ModelResponse},
+    model::{ModelProvider, ModelRequest, ModelResponse, ModelStreamEvent},
     trace::{RunTrace, TraceEvent, TraceSink},
 };
 use serde_json::json;
@@ -18,7 +18,7 @@ pub(super) fn stream<M: ModelProvider, T: TraceSink>(
     sink: &mut T,
     trace: &mut RunTrace,
     step: ModelStep<'_>,
-    mut on_text_delta: Option<&mut dyn FnMut(&str)>,
+    mut on_event: Option<&mut dyn FnMut(ModelStreamEvent<'_>)>,
 ) -> Result<ModelResponse, AgentError> {
     let ModelStep {
         actor,
@@ -45,17 +45,25 @@ pub(super) fn stream<M: ModelProvider, T: TraceSink>(
     let model_started = Instant::now();
     let mut first_delta_at = None;
     let mut emitted_characters = 0usize;
+    let mut first_reasoning_at = None;
+    let mut reasoning_characters = 0usize;
     let response = {
-        let mut emit = |delta: &str| {
-            if first_delta_at.is_none() {
-                first_delta_at = Some(Instant::now());
+        let mut emit = |event: ModelStreamEvent<'_>| {
+            match event {
+                ModelStreamEvent::TextDelta(delta) => {
+                    first_delta_at.get_or_insert_with(Instant::now);
+                    emitted_characters += delta.chars().count();
+                }
+                ModelStreamEvent::ReasoningDelta(delta) => {
+                    first_reasoning_at.get_or_insert_with(Instant::now);
+                    reasoning_characters += delta.chars().count();
+                }
             }
-            emitted_characters += delta.chars().count();
-            if let Some(callback) = on_text_delta.as_deref_mut() {
-                callback(delta);
+            if let Some(callback) = on_event.as_deref_mut() {
+                callback(event);
             }
         };
-        model.stream(request, &mut emit)?
+        model.stream_events(request, &mut emit)?
     };
     trace.model_usage(response.usage());
     let model_elapsed = model_started.elapsed();
@@ -69,6 +77,11 @@ pub(super) fn stream<M: ModelProvider, T: TraceSink>(
             .with_field("loop_step", step as u64)
             .with_field("duration_ms", model_elapsed.as_millis() as u64)
             .with_field("emitted_characters", emitted_characters as u64)
+            .with_field("reasoning_characters", reasoning_characters as u64)
+            .with_field(
+                "first_reasoning_ms",
+                first_reasoning_at.map(|at| at.duration_since(model_started).as_millis() as u64),
+            )
             .with_field(
                 "characters_per_second",
                 if model_elapsed.is_zero() {
